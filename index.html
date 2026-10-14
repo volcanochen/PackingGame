@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-page-node-id="NFPwSagCLrldYFIV8ZdcXH">
+<head data-page-node-id="9izkhDMbYB1MUYB8mOiOAf">
+<meta charset="UTF-8" data-page-node-id="dAmRE838Ss55JBD4tbn7i9">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" data-page-node-id="GqlfPskQVkHOHCrjOepX3p">
+<title>装箱对决 · 方块版 (r2)</title>
+<style>
+  :root{
+    --bg:#0f1420; --panel:#1a2233; --panel2:#222c42;
+    --line:#33405e; --txt:#e8eef7; --dim:#93a0bd;
+    --p0:#4facfe; --p0d:#2d7fe0; --p1:#ff6b6b; --p1d:#d43d3d;
+    --ok:#35d07f; --bad:#ff5c5c; --accent:#ffd166;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{background:var(--bg); color:var(--txt); font-family:"Segoe UI","Microsoft YaHei",system-ui,sans-serif; min-height:100vh;}
+  #app{max-width:1000px; margin:0 auto; padding:14px;}
+  header{display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:10px;}
+  header h1{font-size:20px; letter-spacing:1px;}
+  .tag{font-size:11px; color:var(--dim); background:var(--panel); padding:3px 8px; border-radius:20px;}
+  #statusBar{flex:1; text-align:right; font-size:13px; color:var(--dim);}
+  .layout{display:grid; grid-template-columns:1fr 300px; gap:14px;}
+  @media (max-width:880px){ .layout{grid-template-columns:1fr;} }
+
+  .boardWrap{background:var(--panel); border-radius:14px; padding:14px; position:relative;}
+  .board{
+    display:grid; grid-template-columns:repeat(12,1fr); grid-template-rows:repeat(12,1fr);
+    aspect-ratio:1/1; gap:2px; background:var(--panel2); border:1px solid var(--line); border-radius:8px; padding:2px;
+  }
+  .cell{position:relative; border-radius:2px; background:#1c2638; transition:background .06s;}
+  .cell.empty{background:#26314b;}
+  .cell.empty:hover{background:#31405f;}
+  .cell.anchor{border:2px solid var(--ok); background:#1f5136; cursor:pointer;}
+  .cell.anchor:hover{background:#2a6b47;}
+  /* 合法锚点（方块左上角）画一个小圆点，明确「这里可以落」 */
+  .cell.anchor::after{
+    content:""; position:absolute; left:50%; top:50%; width:5px; height:5px;
+    transform:translate(-50%,-50%); border-radius:50%; background:rgba(53,208,127,.9); pointer-events:none;
+  }
+  .cell.placed0{background:var(--p0); box-shadow:inset 0 0 0 1px var(--p0d);}
+  .cell.placed1{background:var(--p1); box-shadow:inset 0 0 0 1px var(--p1d);}
+  .cell.mvsrc{border:2px solid var(--accent); cursor:pointer;}
+  .cell.mvsrc:hover{background:#7a6426;}
+  .cell.mvdead{opacity:.4; cursor:not-allowed;}
+  .cell.mvtgt{border:2px solid var(--accent); cursor:pointer; background:#5a4a1f;}
+  .cell.mvtgt:hover{background:#7a6426;}
+  /* 落子幽灵：与点击落点严格一致（鼠标所在格 = 方块左上角） */
+  .cell.ghost{background:rgba(86,165,255,.30); box-shadow:inset 0 0 0 2px #56a5ff;}
+  .cell.ghost.origin{box-shadow:inset 0 0 0 3px #9ecbff;}
+  .cell.ghost.origin::before{
+    content:""; position:absolute; left:2px; top:2px; width:0; height:0;
+    border-left:6px solid #9ecbff; border-bottom:6px solid transparent; pointer-events:none;
+  }
+  /* 移动目标幽灵 */
+  .cell.ghostmv{background:rgba(255,209,102,.30); box-shadow:inset 0 0 0 2px var(--accent);}
+  .cell.ghostmv.origin{box-shadow:inset 0 0 0 3px #ffe29a;}
+  .cell.hoverSrc{outline:2px dashed var(--accent); outline-offset:-3px;}
+
+  .panel{background:var(--panel); border-radius:14px; padding:14px;}
+  .panel h3{font-size:13px; color:var(--dim); margin-bottom:8px; letter-spacing:1px; border-bottom:1px solid var(--line); padding-bottom:6px;}
+  .playerCard{border:1px solid var(--line); border-radius:10px; padding:10px; margin-bottom:12px; background:var(--panel2);}
+  .playerCard.active{box-shadow:0 0 0 2px var(--accent);}
+  .pname{font-weight:700; font-size:14px; display:flex; justify-content:space-between; align-items:center;}
+  .pname .count{font-size:11px; color:var(--dim);}
+  .pieceInfo{display:flex; align-items:center; gap:8px; margin-top:10px;}
+  .sq{display:grid; grid-template-columns:repeat(4,12px); grid-template-rows:repeat(4,12px); gap:1px;}
+  .sq i{width:12px; height:12px; border-radius:2px; background:#33405e;}
+  .sq i.f0{background:var(--p0);} .sq i.f1{background:var(--p1);}
+  .pieceInfo .txt{font-size:12px; color:var(--dim); line-height:1.5;}
+  .prow{display:flex; align-items:center; justify-content:space-between; margin-top:10px; gap:8px;}
+  .prow .label{font-size:12px; color:var(--dim);}
+  .chip{font-size:12px; padding:4px 10px; border-radius:6px; border:1px solid var(--line); cursor:pointer; background:var(--panel2);}
+  .chip.ready{background:var(--p0d); color:#fff; border-color:var(--p0d);}
+  .chip.live{background:var(--accent); color:#222; border-color:var(--accent);}
+  .chip.off{opacity:.35; cursor:not-allowed;}
+  .tip{font-size:11px; color:var(--dim); margin-top:8px; line-height:1.6;}
+
+  #log{max-height:130px; overflow-y:auto; font-size:11px; color:var(--dim); margin-top:6px;}
+  #log .t{color:var(--txt);} #log .p0c{color:var(--p0);} #log .p1c{color:var(--p1);}
+
+  button.btn{background:var(--p0d); color:#fff; border:none; border-radius:8px; padding:8px 14px; font-size:13px; cursor:pointer;}
+  button.btn.ghost{background:transparent; border:1px solid var(--line); color:var(--txt);}
+  .topRow{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px;}
+  .modeSel{display:flex; gap:6px;}
+  .modeSel span{font-size:12px; color:var(--dim); cursor:pointer; padding:4px 10px; border:1px solid var(--line); border-radius:20px;}
+  .modeSel span.on{background:var(--accent); color:#222; border-color:var(--accent);}
+
+  .overlay{position:fixed; inset:0; background:rgba(10,14,24,.82); display:flex; align-items:center; justify-content:center; z-index:50;}
+  .overlay.hidden{display:none;}
+  .ovCard{background:var(--panel); border-radius:16px; padding:30px 40px; text-align:center; max-width:420px;}
+  .ovCard h2{font-size:24px; margin-bottom:8px;}
+  .ovCard p{color:var(--dim); font-size:13px; margin-bottom:18px;}
+  .ovCard .row{display:flex; gap:10px; justify-content:center;}
+</style>
+</head>
+<body data-page-node-id="sHGNEAYn4y05Lhs1KVt7rr">
+<div id="app" data-page-node-id="DSxAI3xKfaClRQ5yFgYdpG">
+  <header data-page-node-id="2FQCAgSFmACbQSyChHPbtE">
+    <h1 data-page-node-id="VFM1doCkbzZPtqDydwivFO">📦 装箱对决 · 方块版</h1>
+    <span class="tag" data-page-node-id="5EgoEZUfPDao1mgkUCaLgb">ruleset: packing-duel-r2</span>
+    <span class="tag" data-page-node-id="hoW6SjsUCYC21AEOgdJB96">12×12 · 4×4 · 放不下判负</span>
+    <div id="statusBar" data-page-node-id="JmHshNLrogxnfy3ZSE0zeq"></div>
+  </header>
+
+  <div class="layout" data-page-node-id="yq8wqKabcFpaVZvnqUZnkW">
+    <div class="boardWrap" data-page-node-id="qx6XJ4rtmLda46XSmuotqq">
+      <div class="topRow" data-page-node-id="2LVRVqdDT3of3Bc0TXMEmH">
+        <div class="modeSel" data-page-node-id="GYH998NMEVhVe1ZZrgW2Fp">
+          <span id="mAI" class="on" data-page-node-id="muxTpP4skzxcVjErJ7Vqdb">对战 AI</span>
+          <span id="mHot" data-page-node-id="G5pZTEEbPYEv1qfXzMWz3o">双人热座</span>
+        </div>
+        <button class="btn ghost" id="btnRestart" data-page-node-id="IxYoVn7j23nCpb3OIbFjNJ">重新开局</button>
+        <button class="btn ghost" id="btnUndo" data-page-node-id="ZrnR6OOn9XJdrgsgbNzDeo">悔棋</button>
+      </div>
+      <div class="board" id="board" data-page-node-id="vakH5LMdJ7i73MmHuGTRbu"></div>
+      <div class="tip" id="boardTip" data-page-node-id="I1wpaOKdTa2aQk9YitXiQs">鼠标所在的格子就是 4×4 的<b data-page-node-id="eDQvhDQ9LGbD0mXs1cNQBp">左上角</b>；带绿色描边与圆点的格子才放得下，幽灵只会出现在这些位置。放不下的一方判负。</div>
+    </div>
+
+    <div class="panel" data-page-node-id="Q6hSKLOSTNzF19jv2Jrxlm">
+      <h3 data-page-node-id="Ktf4iqgUjXkewPO0ddZixz">操作台</h3>
+      <div id="p0card" class="playerCard" data-page-node-id="JsXcFmuQspGPH6HsragJ9H"></div>
+      <div id="p1card" class="playerCard" data-page-node-id="yV1W03QfDOqmQHHpyjWAzV"></div>
+      <h3 data-page-node-id="jCUDZtrKJ1mro698Ouuf4G">事件记录</h3>
+      <div id="log" data-page-node-id="iUBnvFWAzKjnEamyxNii5m"></div>
+    </div>
+  </div>
+</div>
+
+<div class="overlay hidden" id="winOverlay" data-page-node-id="ANkXxeS7vze0KLSRRGZ0Gg">
+  <div class="ovCard" data-page-node-id="Tw2EtdT6kGsNR2gIJtmwsG">
+    <h2 id="winTitle" data-page-node-id="jSuCMsFm7Cd05h7MlwGRmb">🎉 你赢了</h2>
+    <p id="winDesc" data-page-node-id="izv9KR4EghWzFg6rDQD0La"></p>
+    <div class="row" data-page-node-id="Y9cHcwbmNKZ26t7YwArKeD">
+      <button class="btn" id="btnAgain" data-page-node-id="kW8Hkacy5I9S2oZ8MvTi7G">再来一局</button>
+      <button class="btn ghost" id="btnClose" data-page-node-id="Wg1arOcRsOTwYD3D80ZW3Y">关闭</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   CONFIG — 唯一规则源（ruleset packing-duel-r2）
+   ============================================================ */
+const CONFIG = {
+  ruleset_id: "packing-duel-r2",
+  boardSize: 12,
+  piece: 4,           // 清一色 4×4 大方块，无限个
+  moveEvery: 2,       // 每放 N 次得 1 个「移动」token
+  moveMax: 3,         // token 上限
+  secondStartMove: 1  // 后手开局补 1 个移动 token（平衡）
+};
+const PLAYER_NAMES = ["你", "对手"];
+const BS = CONFIG.boardSize, P = CONFIG.piece, MAXA = BS - P + 1; // 锚点 0..8
+
+/* ============================================================
+   状态
+   ============================================================ */
+let state = null;
+let mode = "ai";
+let ui = { move:false, srcBox:null, ghost:null, ghostMv:null, hoverSrc:null };
+let history = [];
+
+function newState(){
+  return {
+    board: Array.from({length:BS},()=>Array(BS).fill(null)),
+    placed: {},
+    seq:0,
+    current:0,
+    round:1,
+    players: [
+      { placedCount:0, moves:0 },
+      { placedCount:0, moves:0 }
+    ],
+    over:false, winner:-1
+  };
+}
+function cloneState(s){
+  return {
+    board: s.board.map(r=>r.map(c=> c?{...c}:null)),
+    placed: Object.fromEntries(Object.entries(s.placed).map(([k,v])=>[k,{...v, cells:v.cells.map(p=>[...p])}])),
+    seq:s.seq, current:s.current, round:s.round, over:s.over, winner:s.winner,
+    players: s.players.map(p=>({placedCount:p.placedCount, moves:p.moves}))
+  };
+}
+function log(msg, cls=""){
+  const d=document.getElementById("log");
+  const line=document.createElement("div");
+  line.innerHTML = `<span class="t">#${state?state.round:''} </span>${msg}`;
+  line.className=cls;
+  d.appendChild(line); d.scrollTop=d.scrollHeight;
+  if(d.children.length>80) d.removeChild(d.firstChild);
+}
+
+/* ============================================================
+   规则引擎
+   ============================================================ */
+function anchorCells(r,c){
+  const out=[];
+  for(let dr=0;dr<P;dr++)for(let dc=0;dc<P;dc++) out.push([r+dr,c+dc]);
+  return out;
+}
+function inBoard(r,c){ return r>=0 && r<BS && c>=0 && c<BS; }
+function validAnchor(r,c){
+  if(r<0||c<0||r+P>BS||c+P>BS) return false;
+  return anchorCells(r,c).every(([rr,cc])=> !state.board[rr][cc]);
+}
+function allAnchors(){
+  const res=[];
+  for(let r=0;r<MAXA;r++)for(let c=0;c<MAXA;c++) if(validAnchor(r,c)) res.push([r,c]);
+  return res;
+}
+function canPlaceAny(){ return allAnchors().length>0; }
+// 移动道具：目标 = 把某个对手方块搬到 (r,c) 后能放下（忽略该方块自身占的格）
+function moveTargets(boxId){
+  const b = state.placed[boxId];
+  const res=[];
+  for(let r=0;r<MAXA;r++)for(let c=0;c<MAXA;c++){
+    let ok=true;
+    for(const [rr,cc] of anchorCells(r,c)){
+      if(!inBoard(rr,cc)){ ok=false; break; }
+      const cell=state.board[rr][cc];
+      if(cell && cell.boxId!==boxId){ ok=false; break; }
+    }
+    if(ok){
+      const same = b.cells.length===P*P && b.cells.every(p=> p[0]>=r&&p[0]<r+P&&p[1]>=c&&p[1]<c+P);
+      if(!same) res.push([r,c]);
+    }
+  }
+  return res;
+}
+function oppBoxes(player){
+  return Object.values(state.placed).filter(b=>b.owner===1-player);
+}
+function canMoveNow(player){
+  if(state.players[player].moves<=0) return false;
+  return oppBoxes(player).some(b=> moveTargets(b.boxId).length>0);
+}
+function canAct(player){
+  if(canPlaceAny()) return true;
+  if(canMoveNow(player)) return true;
+  return false;
+}
+
+/* ---- 动作 ---- */
+function doPlace(p, r, c){
+  const cells = anchorCells(r,c);
+  const id = `${p}:sq:${state.seq++}`;
+  state.placed[id] = { boxId:id, owner:p, cells, locked:false };
+  cells.forEach(([rr,cc])=> state.board[rr][cc]={ boxId:id, owner:p });
+  state.players[p].placedCount++;
+  if(state.players[p].placedCount % CONFIG.moveEvery === 0 && state.players[p].moves < CONFIG.moveMax){
+    state.players[p].moves++;
+    log(`<span class="p${p}c">${PLAYER_NAMES[p]}</span> 放下一个 4×4 于 (${r+1},${c+1})，获得 1 个移动 token`);
+  } else {
+    log(`<span class="p${p}c">${PLAYER_NAMES[p]}</span> 放下一个 4×4 于 (${r+1},${c+1})`);
+  }
+}
+function doMove(player, boxId, r, c){
+  const b = state.placed[boxId];
+  b.cells.forEach(([rr,cc])=> state.board[rr][cc]=null);
+  const cells = anchorCells(r,c);
+  b.cells = cells;
+  cells.forEach(([rr,cc])=> state.board[rr][cc]={ boxId, owner:b.owner });
+  state.players[player].moves--;
+  log(`<span class="p${player}c">${PLAYER_NAMES[player]}</span> 把对手的 4×4 搬到 (${r+1},${c+1})`);
+  // 核心判定：移动后若仍无落位，该玩家直接判负
+  if(!canPlaceAny()){
+    state.over = true;
+    state.winner = 1 - player;
+    render(); showWin();
+    return "lost";
+  }
+  return "ok";
+}
+// 模拟：某个移动完成后，当前玩家是否仍有落位
+function moveLeavesPlace(boxId,r,c){
+  const s=cloneState(state);
+  const b=s.placed[boxId];
+  b.cells.forEach(([rr,cc])=> s.board[rr][cc]=null);
+  anchorCells(r,c).forEach(([rr,cc])=> s.board[rr][cc]={boxId,owner:b.owner});
+  for(let rr=0;rr<MAXA;rr++)for(let cc=0;cc<MAXA;cc++){
+    let ok=true;
+    for(const [ar,ac] of anchorCells(rr,cc)){
+      if(!inBoard(ar,ac)||s.board[ar][ac]){ ok=false; break; }
+    }
+    if(ok) return true;
+  }
+  return false;
+}
+
+/* ---- 回合推进 ---- */
+function advance(){
+  if(state.over) return;
+  state.current = 1 - state.current;
+  state.round++;
+  resetUi();
+  if(!canAct(state.current)){
+    state.over=true;
+    state.winner = 1 - state.current;
+    render(); showWin();
+    return;
+  }
+  // 无法放置但有移动 token：提示必须移动出落位，否则判负
+  if(!canPlaceAny() && canMoveNow(state.current)){
+    setTip("你已放不下 4×4：必须用「移动」把对手的方块搬到别处。移动后若仍无落位，将直接判负！", true);
+  }
+  render();
+  if(mode==="ai" && state.current===1 && !state.over){
+    setTimeout(aiTurn, 520);
+  }
+}
+function commitAction(){
+  history.push(cloneState(state));
+  if(history.length>40) history.shift();
+  advance();
+}
+
+/* ---- AI：贪心（保持最大连续空域 / 移动对手方块开位）---- */
+function scoreAfter(s){
+  const seen=new Set(); let max=0;
+  for(let r=0;r<BS;r++)for(let c=0;c<BS;c++){
+    if(s.board[r][c] || seen.has(r+","+c)) continue;
+    let q=[[r,c]],area=0; seen.add(r+","+c);
+    while(q.length){ const [rr,cc]=q.pop(); area++;
+      [[1,0],[-1,0],[0,1],[0,-1]].forEach(([dr,dc])=>{
+        const nr=rr+dr,nc=cc+dc;
+        if(inBoard(nr,nc)&&!s.board[nr][nc]&&!seen.has(nr+","+nc)){ seen.add(nr+","+nc); q.push([nr,nc]); }
+      });
+    }
+    if(area>max) max=area;
+  }
+  return max;
+}
+function scoreAfterPlace(r,c){
+  const s=cloneState(state);
+  anchorCells(r,c).forEach(([rr,cc])=> s.board[rr][cc]={boxId:"x",owner:0});
+  return scoreAfter(s);
+}
+function scoreAfterMove(boxId,r,c){
+  const s=cloneState(state);
+  const b=s.placed[boxId];
+  b.cells.forEach(([rr,cc])=> s.board[rr][cc]=null);
+  anchorCells(r,c).forEach(([rr,cc])=> s.board[rr][cc]={boxId,owner:b.owner});
+  return scoreAfter(s);
+}
+function aiTurn(){
+  if(state.over) return;
+  let best=null, bestScore=-Infinity;
+  for(let r=0;r<MAXA;r++)for(let c=0;c<MAXA;c++){
+    if(validAnchor(r,c)){
+      const sc=scoreAfterPlace(r,c);
+      if(sc>bestScore){ bestScore=sc; best=[r,c]; }
+    }
+  }
+  if(best){ doPlace(1, best[0], best[1]); commitAction(); return; }
+  if(canMoveNow(1)){
+    let bBest=null, bScore=-Infinity;
+    for(const b of oppBoxes(1)){
+      for(const [r,c] of moveTargets(b.boxId)){
+        // 只考虑移动后仍能落子的走法，避免自杀式移动
+        if(!moveLeavesPlace(b.boxId,r,c)) continue;
+        const sc=scoreAfterMove(b.boxId,r,c);
+        if(sc>bScore){ bScore=sc; bBest={boxId:b.boxId,r,c}; }
+      }
+    }
+    if(bBest){ doMove(1, bBest.boxId, bBest.r, bBest.c); commitAction(); return; }
+  }
+  state.over=true; state.winner=0; render(); showWin();
+}
+
+/* ============================================================
+   渲染
+   ============================================================ */
+const boardEl=document.getElementById("board");
+function render(){ renderBoard(); renderPlayers(); renderStatus(); paintGhost(); }
+let _mvCache={};
+function renderBoard(){
+  boardEl.innerHTML="";
+  _mvCache={};
+  for(let r=0;r<BS;r++)for(let c=0;c<BS;c++){
+    const d=document.createElement("div");
+    d.dataset.r=r; d.dataset.c=c;
+    const cell=state.board[r][c];
+    if(cell){
+      d.className="cell placed"+cell.owner;
+      if(ui.move && ui.srcBox===null && cell.owner===1-state.current){
+        if(!(cell.boxId in _mvCache)) _mvCache[cell.boxId] = moveTargets(cell.boxId).length>0;
+        d.classList.add(_mvCache[cell.boxId] ? "mvsrc" : "mvdead");
+      }
+      if(ui.move && ui.srcBox!==null && cell.boxId===ui.srcBox) d.classList.add("mvsrc");
+    } else {
+      d.className="cell empty";
+      if(!ui.move && validAnchor(r,c)) d.classList.add("anchor");
+      if(ui.move && ui.srcBox!==null && isMoveTargetCell(r,c)) d.classList.add("mvtgt");
+    }
+    d.addEventListener("click",()=> onCellClick(r,c));
+    boardEl.appendChild(d);
+  }
+}
+function isMoveTargetCell(r,c){
+  if(!ui.srcBox) return false;
+  for(const [rr,cc] of moveTargets(ui.srcBox)){
+    if(rr===r && cc===c) return true;
+  }
+  return false;
+}
+/* ---- 落子幽灵预览 ----
+   规则：预览位置 == 点击后的真实落点。
+   鼠标所在格 (r,c) 直接作为 4×4 的左上角；只有该位置能完整放下才画幽灵。
+   放不下的位置一律不预览（所见即所得，点了必然能下）。            */
+function updateGhost(r,c){
+  ui.ghost=null; ui.ghostMv=null; ui.hoverSrc=null;
+  const idle = state.over || (mode==="ai" && state.current===1);
+  if(!idle && ui.move && ui.srcBox!==null){
+    // 移动模式已选源方块：预览搬到 (r,c) 后的样子，同样只画合法目标
+    if(moveTargets(ui.srcBox).some(([rr,cc])=> rr===r && cc===c)) ui.ghostMv={r,c};
+  } else if(!idle && ui.move){
+    // 移动模式待选源：高亮鼠标下那个可被搬动的对手方块
+    const cell=state.board[r][c];
+    if(cell && cell.owner===1-state.current && moveTargets(cell.boxId).length>0) ui.hoverSrc=cell.boxId;
+  } else if(!idle && validAnchor(r,c)){
+    ui.ghost={r,c};
+  }
+  paintGhost();
+}
+function paintGhost(){
+  // 状态变化后旧的幽灵可能已失效（例如 AI 刚占了那块地）
+  if(ui.ghost && !validAnchor(ui.ghost.r, ui.ghost.c)) ui.ghost=null;
+  if(ui.ghostMv && ui.srcBox && !moveTargets(ui.srcBox).some(([rr,cc])=>rr===ui.ghostMv.r&&cc===ui.ghostMv.c)) ui.ghostMv=null;
+  const g = ui.ghost || ui.ghostMv;
+  for(const d of boardEl.children){
+    const rr=+d.dataset.r, cc=+d.dataset.c;
+    const on = !!g && rr>=g.r && rr<g.r+P && cc>=g.c && cc<g.c+P;
+    d.classList.toggle("ghost", !!ui.ghost && on);
+    d.classList.toggle("ghostmv", !!ui.ghostMv && on);
+    d.classList.toggle("origin", !!g && rr===g.r && cc===g.c);
+    d.classList.toggle("hoverSrc", !!ui.hoverSrc && !!state.board[rr][cc] && state.board[rr][cc].boxId===ui.hoverSrc);
+  }
+}
+boardEl.addEventListener("mousemove", e=>{
+  const d=e.target && e.target.closest ? e.target.closest(".cell") : null;
+  if(d) updateGhost(+d.dataset.r, +d.dataset.c);
+});
+boardEl.addEventListener("mouseleave", ()=>{ ui.ghost=null; paintGhost(); });
+boardEl.addEventListener("touchmove", e=>{
+  if(e.touches.length===0) return;
+  const t=e.touches[0];
+  const el=document.elementFromPoint(t.clientX, t.clientY);
+  const d=el && el.closest ? el.closest(".cell") : null;
+  if(d) updateGhost(+d.dataset.r, +d.dataset.c);
+}, {passive:true});
+boardEl.addEventListener("touchend", ()=>{ ui.ghost=null; paintGhost(); });
+function onCellClick(r,c){
+  if(state.over) return;
+  const p=state.current;
+  if(mode==="ai" && p===1) return;
+  if(ui.move){
+    if(ui.srcBox===null){
+      const cell=state.board[r][c];
+      if(cell && cell.owner===1-p){
+        if(moveTargets(cell.boxId).length===0){
+          tipErr("这个方块没有能搬去的位置，换一个吧"); return;
+        }
+        ui.srcBox=cell.boxId;
+        setTip("已选中对手的方块：再点一个<b>金色高亮</b>的位置把它搬过去（该格 = 新左上角）。");
+        render(); return;
+      }
+      tipErr("请先点<b>对手</b>的方块（金色虚线框的那个）"); return;
+    } else {
+      if(moveTargets(ui.srcBox).some(([rr,cc])=> rr===r && cc===c)){
+        const res = doMove(p, ui.srcBox, r, c);
+        resetUi();
+        if(res==="lost") return;      // 移动后仍无落位：直接判负，不再推进回合
+        commitAction(); return;
+      }
+      tipErr("那里搬不过去：只能搬到<b>金色高亮</b>的空位");
+      ui.srcBox=null; render(); return;
+    }
+  }
+  if(state.board[r][c]){ tipErr("这里已经有方块了"); return; }
+  if(!validAnchor(r,c)){
+    tipErr(`这里放不下 4×4：以 (${r+1},${c+1}) 为左上角会越界或被占。请选择<b>带绿色圆点</b>的格子`);
+    return;
+  }
+  doPlace(p, r, c); resetUi(); commitAction();
+}
+function renderPlayers(){
+  [0,1].forEach(p=>{
+    const card=document.getElementById("p"+p+"card");
+    card.innerHTML="";
+    card.className="playerCard"+(state.current===p?" active":"");
+    const ph=state.players[p];
+    const own = p===state.current && !(mode==="ai"&&p===1);
+    card.innerHTML=`
+      <div class="pname"><span>${PLAYER_NAMES[p]}</span>
+        <span class="count">已放 ${ph.placedCount} · 移动 ${ph.moves}/${CONFIG.moveMax}</span></div>
+      <div class="pieceInfo">
+        <div class="sq">${Array.from({length:16},(_,i)=>`<i class="f${p}"></i>`).join("")}</div>
+        <div class="txt">清一色 4×4 方块，无限个<br/>每放 ${CONFIG.moveEvery} 个得 1 移动 token</div>
+      </div>
+      <div class="prow">
+        <span class="label">移动：</span>
+        <button class="chip ${ui.move&&state.current===p?'live':(ph.moves>0&&own?'ready':'off')}" data-p="${p}">移动×${ph.moves}</button>
+      </div>`;
+    const btn=card.querySelector(".chip");
+    btn.addEventListener("click",()=>{
+      if(!own) return;
+      if(ph.moves<=0){ flash(btn,"没有移动 token"); return; }
+      if(oppBoxes(p).length===0){ flash(btn,"对手还没有方块"); return; }
+      if(!canMoveNow(p)){ flash(btn,"没有可搬动的位置"); return; }
+      ui.move=true; ui.srcBox=null;
+      setTip("【移动】先点一个<b>对手</b>的方块（金色虚线框），再点一个<b>金色高亮</b>的空位把它搬过去。");
+      render();
+    });
+  });
+}
+function flash(btn,msg){
+  const old=btn.textContent; btn.textContent=msg; btn.style.background="var(--bad)";
+  setTimeout(()=>{ btn.textContent=old; btn.style.background=""; },900);
+}
+const TIP_DEFAULT = "鼠标所在的格子就是 4×4 的<b>左上角</b>；带绿色描边与圆点的格子才放得下，幽灵只会出现在这些位置。放不下的一方判负。";
+function resetUi(){
+  ui={ move:false, srcBox:null, ghost:null, ghostMv:null, hoverSrc:null };
+  setTip(TIP_DEFAULT);
+}
+function setTip(html, bad){
+  const t=document.getElementById("boardTip");
+  t.innerHTML=html;
+  t.style.color = bad ? "var(--bad)" : "";
+}
+let tipTimer=null;
+function tipErr(msg){
+  setTip(msg, true);
+  clearTimeout(tipTimer);
+  tipTimer=setTimeout(()=>setTip(TIP_DEFAULT), 1600);
+}
+function renderStatus(){
+  const sb=document.getElementById("statusBar");
+  const anchors = allAnchors().length;
+  sb.innerHTML = state.over
+    ? `<b>${PLAYER_NAMES[state.winner]} 获胜（第 ${state.round} 回合）</b>`
+    : `第 ${state.round} 回合 · 轮到 <b>${PLAYER_NAMES[state.current]}</b> · 可落锚点 <b style="color:${anchors? 'var(--ok)':'var(--bad)'}">${anchors}</b>`;
+}
+function showWin(){
+  const p=state.winner;
+  document.getElementById("winOverlay").classList.remove("hidden");
+  document.getElementById("winTitle").textContent =
+    mode==="hot" ? `🎉 ${PLAYER_NAMES[p]} 获胜` : (p===0?"🎉 你赢了":"🤝 对手获胜");
+  document.getElementById("winDesc").textContent =
+    `第 ${state.round} 回合，${PLAYER_NAMES[1-p]} 已放不下任何 4×4，${PLAYER_NAMES[p]} 获胜。`;
+}
+
+/* ============================================================
+   控制
+   ============================================================ */
+function startGame(){
+  history=[];
+  state=newState();
+  state.players[1].moves = CONFIG.secondStartMove; // 后手补 1 移动 token
+  document.getElementById("winOverlay").classList.add("hidden");
+  document.getElementById("log").innerHTML="";
+  resetUi();
+  render();
+  log("对局开始：12×12 棋盘，双方无限个 4×4，放不下的一方判负。","");
+}
+document.getElementById("btnRestart").addEventListener("click", startGame);
+document.getElementById("btnUndo").addEventListener("click", undo);
+function undo(){
+  if(history.length===0) return;
+  let s=history.pop();
+  // AI 模式：一路回退到「人类」的回合，否则会立刻又触发 AI 落子，等于没悔成
+  while(mode==="ai" && s.current===1 && history.length>0) s=history.pop();
+  state=s;
+  state.over=false;                 // 若上一手已判负，悔棋可救回
+  state.winner=-1;
+  document.getElementById("winOverlay").classList.add("hidden");
+  resetUi(); render();
+  log("悔棋：回到上一手之前","");
+}
+document.getElementById("btnAgain").addEventListener("click", ()=>{
+  document.getElementById("winOverlay").classList.add("hidden");
+  startGame();
+});
+document.getElementById("btnClose").addEventListener("click", ()=>{
+  document.getElementById("winOverlay").classList.add("hidden");
+});
+document.getElementById("mAI").addEventListener("click", ()=>{ mode="ai"; setModeSel(); startGame(); });
+document.getElementById("mHot").addEventListener("click", ()=>{ mode="hot"; setModeSel(); startGame(); });
+function setModeSel(){
+  document.getElementById("mAI").classList.toggle("on", mode==="ai");
+  document.getElementById("mHot").classList.toggle("on", mode==="hot");
+}
+document.addEventListener("keydown", e=>{
+  if(e.key==="Escape"){ resetUi(); render(); }
+});
+
+startGame();
+</script>
+</body>
+</html>

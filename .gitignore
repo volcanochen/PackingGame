@@ -1,0 +1,14 @@
+# 本地工具/记忆目录，不入库
+.workbuddy/
+
+# 编辑器与系统
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# 临时与产物
+*.tmp
+*.log
+node_modules/
+dist/

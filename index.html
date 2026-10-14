@@ -3,7 +3,7 @@
 <head data-page-node-id="9izkhDMbYB1MUYB8mOiOAf">
 <meta charset="UTF-8" data-page-node-id="dAmRE838Ss55JBD4tbn7i9">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" data-page-node-id="GqlfPskQVkHOHCrjOepX3p">
-<title>装箱对决 · 方块版 (r2)</title>
+<title>装箱对决 · 方块版 (r2.3)</title>
 <style>
   :root{
     --bg:#0f1420; --panel:#1a2233; --panel2:#222c42;
@@ -72,6 +72,8 @@
   .chip.ready{background:var(--p0d); color:#fff; border-color:var(--p0d);}
   .chip.live{background:var(--accent); color:#222; border-color:var(--accent);}
   .chip.off{opacity:.35; cursor:not-allowed;}
+  .mustTip{margin-top:8px; font-size:11px; line-height:1.5; color:var(--accent);
+    background:rgba(255,209,102,.12); border:1px solid rgba(255,209,102,.45); border-radius:6px; padding:5px 8px;}
   .tip{font-size:11px; color:var(--dim); margin-top:8px; line-height:1.6;}
 
   #log{max-height:130px; overflow-y:auto; font-size:11px; color:var(--dim); margin-top:6px;}
@@ -96,8 +98,8 @@
 <div id="app" data-page-node-id="DSxAI3xKfaClRQ5yFgYdpG">
   <header data-page-node-id="2FQCAgSFmACbQSyChHPbtE">
     <h1 data-page-node-id="VFM1doCkbzZPtqDydwivFO">📦 装箱对决 · 方块版</h1>
-    <span class="tag" data-page-node-id="5EgoEZUfPDao1mgkUCaLgb">ruleset: packing-duel-r2</span>
-    <span class="tag" data-page-node-id="hoW6SjsUCYC21AEOgdJB96">12×12 · 4×4 · 放不下判负</span>
+    <span class="tag" data-page-node-id="5EgoEZUfPDao1mgkUCaLgb">ruleset: packing-duel-r2.3</span>
+    <span class="tag" data-page-node-id="hoW6SjsUCYC21AEOgdJB96">12×12 · 4×4 · 放不下判负 · 移动可续落</span>
     <div id="statusBar" data-page-node-id="JmHshNLrogxnfy3ZSE0zeq"></div>
   </header>
 
@@ -112,7 +114,7 @@
         <button class="btn ghost" id="btnUndo" data-page-node-id="ZrnR6OOn9XJdrgsgbNzDeo">悔棋</button>
       </div>
       <div class="board" id="board" data-page-node-id="vakH5LMdJ7i73MmHuGTRbu"></div>
-      <div class="tip" id="boardTip" data-page-node-id="I1wpaOKdTa2aQk9YitXiQs">鼠标所在的格子就是 4×4 的<b data-page-node-id="eDQvhDQ9LGbD0mXs1cNQBp">左上角</b>；带绿色描边与圆点的格子才放得下，幽灵只会出现在这些位置。放不下的一方判负。</div>
+      <div class="tip" id="boardTip" data-page-node-id="I1wpaOKdTa2aQk9YitXiQs">鼠标所在的格子就是 4×4 的<b data-page-node-id="eDQvhDQ9LGbD0mXs1cNQBp">左上角</b>；带绿色描边与圆点的格子才放得下，幽灵只会出现在这些位置。每回合可以「移动＋落子」连招，也可以直接落子。</div>
     </div>
 
     <div class="panel" data-page-node-id="Q6hSKLOSTNzF19jv2Jrxlm">
@@ -141,7 +143,7 @@
    CONFIG — 唯一规则源（ruleset packing-duel-r2）
    ============================================================ */
 const CONFIG = {
-  ruleset_id: "packing-duel-r2",
+  ruleset_id: "packing-duel-r2.3",
   boardSize: 12,
   piece: 4,           // 清一色 4×4 大方块，无限个
   moveEvery: 2,       // 每放 N 次得 1 个「移动」token
@@ -170,7 +172,8 @@ function newState(){
       { placedCount:0, moves:0 },
       { placedCount:0, moves:0 }
     ],
-    over:false, winner:-1
+    over:false, winner:-1,
+    mustPlace:false      // true = 本回合已用过「移动」，必须再落一个 4×4 才算结束（r2.3）
   };
 }
 function cloneState(s){
@@ -178,6 +181,7 @@ function cloneState(s){
     board: s.board.map(r=>r.map(c=> c?{...c}:null)),
     placed: Object.fromEntries(Object.entries(s.placed).map(([k,v])=>[k,{...v, cells:v.cells.map(p=>[...p])}])),
     seq:s.seq, current:s.current, round:s.round, over:s.over, winner:s.winner,
+    mustPlace:!!s.mustPlace,
     players: s.players.map(p=>({placedCount:p.placedCount, moves:p.moves}))
   };
 }
@@ -230,14 +234,19 @@ function moveTargets(boxId){
 function oppBoxes(player){
   return Object.values(state.placed).filter(b=>b.owner===1-player);
 }
+// r2.3 关键约束：移动之后必须还能落一个方块。
+// 所以只有「搬完之后自己仍有落位」的目标才是合法目标 —— 搬完自己也没地方落的走法
+// 等价于自杀，直接从可选目标里过滤掉（与「放不下就不预览」同一个原则）。
+function safeMoveTargets(boxId){
+  return moveTargets(boxId).filter(([r,c])=> moveLeavesPlace(boxId,r,c));
+}
 function canMoveNow(player){
   if(state.players[player].moves<=0) return false;
-  return oppBoxes(player).some(b=> moveTargets(b.boxId).length>0);
+  return oppBoxes(player).some(b=> safeMoveTargets(b.boxId).length>0);
 }
 function canAct(player){
   if(canPlaceAny()) return true;
-  if(canMoveNow(player)) return true;
-  return false;
+  return canMoveNow(player);
 }
 
 /* ---- 动作 ---- */
@@ -292,6 +301,7 @@ function advance(){
   if(state.over) return;
   state.current = 1 - state.current;
   state.round++;
+  state.mustPlace = false;      // 不变量：新回合一定从「落牌之前」开始
   resetUi();
   if(!canAct(state.current)){
     state.over=true;
@@ -299,23 +309,58 @@ function advance(){
     render(); showWin();
     return;
   }
-  // 无法放置但有移动 token：提示必须移动出落位，否则判负
+  // 无法放置但有移动 token：只有这一条路，且移动后得立刻补落一手
   if(!canPlaceAny() && canMoveNow(state.current)){
-    setTip("你已放不下 4×4：必须用「移动」把对手的方块搬到别处。移动后若仍无落位，将直接判负！", true);
+    setTip("放不下 4×4 了：只剩「移动」这一条路 —— 搬开对手方块后，你得能<b>立刻补落一个</b>，否则判负。", true);
   }
   render();
   if(mode==="ai" && state.current===1 && !state.over){
     setTimeout(aiTurn, 520);
   }
 }
-function commitAction(){
+function snapshot(){
   history.push(cloneState(state));
-  if(history.length>40) history.shift();
+  if(history.length>60) history.shift();
+}
+function commitAction(){
+  snapshot();
   advance();
 }
 
-/* ---- AI：贪心（保持最大连续空域 / 移动对手方块开位）---- */
-function scoreAfter(s){
+/* ---- AI（r2.3）----
+   每回合两种打法：
+     A) 直接落一个 4×4，结束回合
+     B) 先「移动」对手方块，再落一个 4×4 —— 同一回合完成
+   评分 = 自己剩余可落锚点数 ×1000 + 最大连通空域（前者才是胜负判据）。
+   B 要花 1 个 token，只有收益超过 AI_MOVE_COST 时才值得。            */
+const AI_MOVE_COST = 6;   // 移动的机会成本，单位＝格数
+const AI_TOPK = 8;        // 只对即时收益最好的 K 个移动候选做「移动+落子」深度搜索
+
+function anchorsOn(s){
+  let n=0;
+  for(let r=0;r<MAXA;r++)for(let c=0;c<MAXA;c++){
+    let ok=true;
+    for(let dr=0;dr<P&&ok;dr++)for(let dc=0;dc<P&&ok;dc++) if(s.board[r+dr][c+dc]) ok=false;
+    if(ok) n++;
+  }
+  return n;
+}
+function canPlaceOn(s,r,c){
+  for(let dr=0;dr<P;dr++)for(let dc=0;dc<P;dc++) if(s.board[r+dr][c+dc]) return false;
+  return true;
+}
+function placeOn(s,r,c){          // 原地修改模拟状态
+  anchorCells(r,c).forEach(([rr,cc])=> s.board[rr][cc]={boxId:"sim",owner:1});
+  return s;
+}
+function simMove(boxId,r,c){
+  const s=cloneState(state);
+  const b=s.placed[boxId];
+  b.cells.forEach(([rr,cc])=> s.board[rr][cc]=null);
+  anchorCells(r,c).forEach(([rr,cc])=> s.board[rr][cc]={boxId,owner:b.owner});
+  return s;
+}
+function scoreAfter(s){                // 局面里最大的一块连通空域
   const seen=new Set(); let max=0;
   for(let r=0;r<BS;r++)for(let c=0;c<BS;c++){
     if(s.board[r][c] || seen.has(r+","+c)) continue;
@@ -330,40 +375,56 @@ function scoreAfter(s){
   }
   return max;
 }
-function scoreAfterPlace(r,c){
-  const s=cloneState(state);
-  anchorCells(r,c).forEach(([rr,cc])=> s.board[rr][cc]={boxId:"x",owner:0});
-  return scoreAfter(s);
+function scoreState(s){ return anchorsOn(s)*1000 + scoreAfter(s); }
+function bestFollowUp(s){          // 给定局面下，AI 自己能落的最佳位置
+  let ret=null;
+  for(let r=0;r<MAXA;r++)for(let c=0;c<MAXA;c++){
+    if(!canPlaceOn(s,r,c)) continue;
+    const sc=scoreState(placeOn(cloneState(s),r,c));
+    if(!ret || sc>ret.score) ret={r,c,score:sc};
+  }
+  return ret;
 }
-function scoreAfterMove(boxId,r,c){
-  const s=cloneState(state);
-  const b=s.placed[boxId];
-  b.cells.forEach(([rr,cc])=> s.board[rr][cc]=null);
-  anchorCells(r,c).forEach(([rr,cc])=> s.board[rr][cc]={boxId,owner:b.owner});
-  return scoreAfter(s);
+function aiPlan(){
+  let direct=null;
+  for(const [r,c] of allAnchors()){
+    const sc=scoreState(placeOn(cloneState(state),r,c));
+    if(!direct || sc>direct.score) direct={r,c,score:sc};
+  }
+  let combo=null;
+  if(canMoveNow(1)){
+    const cands=[];
+    for(const b of oppBoxes(1)) for(const [mr,mc] of safeMoveTargets(b.boxId)){
+      const s1=simMove(b.boxId,mr,mc);
+      if(anchorsOn(s1)===0) continue;              // 兜底：自杀式移动不应出现
+      cands.push({boxId:b.boxId, mr, mc, s1, sc:scoreState(s1)});
+    }
+    cands.sort((x,y)=>y.sc-x.sc);                  // 粗筛后再深搜，避免组合爆炸
+    for(const cd of cands.slice(0,AI_TOPK)){
+      const fu=bestFollowUp(cd.s1);
+      if(fu && (!combo || fu.score>combo.score)) combo={boxId:cd.boxId, mr:cd.mr, mc:cd.mc, pr:fu.r, pc:fu.c, score:fu.score};
+    }
+  }
+  return {direct, combo};
 }
 function aiTurn(){
   if(state.over) return;
-  let best=null, bestScore=-Infinity;
-  for(let r=0;r<MAXA;r++)for(let c=0;c<MAXA;c++){
-    if(validAnchor(r,c)){
-      const sc=scoreAfterPlace(r,c);
-      if(sc>bestScore){ bestScore=sc; best=[r,c]; }
-    }
+  const {direct, combo}=aiPlan();
+  const useCombo = combo && (!direct || combo.score - AI_MOVE_COST > direct.score);
+  if(useCombo){
+    snapshot();
+    if(doMove(1, combo.boxId, combo.mr, combo.mc)==="lost"){ resetUi(); return; }
+    state.mustPlace=true; resetUi(); render();
+    setTimeout(()=>{
+      // 若期间被悔棋/重开，状态已变，放弃这手
+      if(state.over || state.current!==1 || !state.mustPlace) return;
+      if(!canPlaceOn(state, combo.pr, combo.pc)) return;
+      doPlace(1, combo.pr, combo.pc);
+      state.mustPlace=false; resetUi(); advance();
+    }, 520);
+    return;
   }
-  if(best){ doPlace(1, best[0], best[1]); commitAction(); return; }
-  if(canMoveNow(1)){
-    let bBest=null, bScore=-Infinity;
-    for(const b of oppBoxes(1)){
-      for(const [r,c] of moveTargets(b.boxId)){
-        // 只考虑移动后仍能落子的走法，避免自杀式移动
-        if(!moveLeavesPlace(b.boxId,r,c)) continue;
-        const sc=scoreAfterMove(b.boxId,r,c);
-        if(sc>bScore){ bScore=sc; bBest={boxId:b.boxId,r,c}; }
-      }
-    }
-    if(bBest){ doMove(1, bBest.boxId, bBest.r, bBest.c); commitAction(); return; }
-  }
+  if(direct){ snapshot(); doPlace(1, direct.r, direct.c); resetUi(); advance(); return; }
   state.over=true; state.winner=0; render(); showWin();
 }
 
@@ -383,7 +444,7 @@ function renderBoard(){
     if(cell){
       d.className="cell placed"+cell.owner;
       if(ui.move && ui.srcBox===null && cell.owner===1-state.current){
-        if(!(cell.boxId in _mvCache)) _mvCache[cell.boxId] = moveTargets(cell.boxId).length>0;
+        if(!(cell.boxId in _mvCache)) _mvCache[cell.boxId] = safeMoveTargets(cell.boxId).length>0;
         d.classList.add(_mvCache[cell.boxId] ? "mvsrc" : "mvdead");
       }
       if(ui.move && ui.srcBox!==null && cell.boxId===ui.srcBox) d.classList.add("mvsrc");
@@ -398,7 +459,7 @@ function renderBoard(){
 }
 function isMoveTargetCell(r,c){
   if(!ui.srcBox) return false;
-  for(const [rr,cc] of moveTargets(ui.srcBox)){
+  for(const [rr,cc] of safeMoveTargets(ui.srcBox)){
     if(rr===r && cc===c) return true;
   }
   return false;
@@ -412,11 +473,11 @@ function updateGhost(r,c){
   const idle = state.over || (mode==="ai" && state.current===1);
   if(!idle && ui.move && ui.srcBox!==null){
     // 移动模式已选源方块：预览搬到 (r,c) 后的样子，同样只画合法目标
-    if(moveTargets(ui.srcBox).some(([rr,cc])=> rr===r && cc===c)) ui.ghostMv={r,c};
+    if(safeMoveTargets(ui.srcBox).some(([rr,cc])=> rr===r && cc===c)) ui.ghostMv={r,c};
   } else if(!idle && ui.move){
     // 移动模式待选源：高亮鼠标下那个可被搬动的对手方块
     const cell=state.board[r][c];
-    if(cell && cell.owner===1-state.current && moveTargets(cell.boxId).length>0) ui.hoverSrc=cell.boxId;
+    if(cell && cell.owner===1-state.current && safeMoveTargets(cell.boxId).length>0) ui.hoverSrc=cell.boxId;
   } else if(!idle && validAnchor(r,c)){
     ui.ghost={r,c};
   }
@@ -425,7 +486,7 @@ function updateGhost(r,c){
 function paintGhost(){
   // 状态变化后旧的幽灵可能已失效（例如 AI 刚占了那块地）
   if(ui.ghost && !validAnchor(ui.ghost.r, ui.ghost.c)) ui.ghost=null;
-  if(ui.ghostMv && ui.srcBox && !moveTargets(ui.srcBox).some(([rr,cc])=>rr===ui.ghostMv.r&&cc===ui.ghostMv.c)) ui.ghostMv=null;
+  if(ui.ghostMv && ui.srcBox && !safeMoveTargets(ui.srcBox).some(([rr,cc])=>rr===ui.ghostMv.r&&cc===ui.ghostMv.c)) ui.ghostMv=null;
   const g = ui.ghost || ui.ghostMv;
   for(const d of boardEl.children){
     const rr=+d.dataset.r, cc=+d.dataset.c;
@@ -453,12 +514,18 @@ function onCellClick(r,c){
   if(state.over) return;
   const p=state.current;
   if(mode==="ai" && p===1) return;
+  if(state.mustPlace){
+    if(ui.move){ ui.move=false; ui.srcBox=null; }
+    if(state.board[r][c]){ tipErr("这里已经有方块了"); return; }
+    if(!validAnchor(r,c)){ tipErr("这里放不下 4×4：请选择<b>带绿色圆点</b>的格子"); return; }
+    doPlace(p, r, c); state.mustPlace=false; resetUi(); commitAction(); return;
+  }
   if(ui.move){
     if(ui.srcBox===null){
       const cell=state.board[r][c];
       if(cell && cell.owner===1-p){
-        if(moveTargets(cell.boxId).length===0){
-          tipErr("这个方块没有能搬去的位置，换一个吧"); return;
+        if(safeMoveTargets(cell.boxId).length===0){
+          tipErr("这个方块搬去哪你都没法落子了，换一个吧"); return;
         }
         ui.srcBox=cell.boxId;
         setTip("已选中对手的方块：再点一个<b>金色高亮</b>的位置把它搬过去（该格 = 新左上角）。");
@@ -466,11 +533,14 @@ function onCellClick(r,c){
       }
       tipErr("请先点<b>对手</b>的方块（金色虚线框的那个）"); return;
     } else {
-      if(moveTargets(ui.srcBox).some(([rr,cc])=> rr===r && cc===c)){
+      if(safeMoveTargets(ui.srcBox).some(([rr,cc])=> rr===r && cc===c)){
+        snapshot();                                  // 悔棋点：可退回移动之前
         const res = doMove(p, ui.srcBox, r, c);
         resetUi();
-        if(res==="lost") return;      // 移动后仍无落位：直接判负，不再推进回合
-        commitAction(); return;
+        if(res==="lost") return;                     // 移动后仍无落位：直接判负
+        state.mustPlace=true;                        // 本回合还能再落一个方块
+        setTip("移动完成 —— 同回合内你还要<b>再落一个 4×4</b>，落完才轮到对手。");
+        render(); return;
       }
       tipErr("那里搬不过去：只能搬到<b>金色高亮</b>的空位");
       ui.srcBox=null; render(); return;
@@ -490,6 +560,7 @@ function renderPlayers(){
     card.className="playerCard"+(state.current===p?" active":"");
     const ph=state.players[p];
     const own = p===state.current && !(mode==="ai"&&p===1);
+    const chained = state.mustPlace && state.current===p;   // 已用移动，正在等待补落的那一手
     card.innerHTML=`
       <div class="pname"><span>${PLAYER_NAMES[p]}</span>
         <span class="count">已放 ${ph.placedCount} · 移动 ${ph.moves}/${CONFIG.moveMax}</span></div>
@@ -499,11 +570,13 @@ function renderPlayers(){
       </div>
       <div class="prow">
         <span class="label">移动：</span>
-        <button class="chip ${ui.move&&state.current===p?'live':(ph.moves>0&&own?'ready':'off')}" data-p="${p}">移动×${ph.moves}</button>
-      </div>`;
+        <button class="chip ${ui.move&&state.current===p?'live':(ph.moves>0&&own&&!chained?'ready':'off')}" data-p="${p}">移动×${ph.moves}</button>
+      </div>
+      ${chained?`<div class="mustTip">已用过移动 —— 再落一个 4×4 才结束回合</div>`:``}`;
     const btn=card.querySelector(".chip");
     btn.addEventListener("click",()=>{
       if(!own) return;
+      if(chained){ flash(btn,"本回合已用过移动"); return; }
       if(ph.moves<=0){ flash(btn,"没有移动 token"); return; }
       if(oppBoxes(p).length===0){ flash(btn,"对手还没有方块"); return; }
       if(!canMoveNow(p)){ flash(btn,"没有可搬动的位置"); return; }
@@ -517,10 +590,12 @@ function flash(btn,msg){
   const old=btn.textContent; btn.textContent=msg; btn.style.background="var(--bad)";
   setTimeout(()=>{ btn.textContent=old; btn.style.background=""; },900);
 }
-const TIP_DEFAULT = "鼠标所在的格子就是 4×4 的<b>左上角</b>；带绿色描边与圆点的格子才放得下，幽灵只会出现在这些位置。放不下的一方判负。";
+const TIP_DEFAULT = "鼠标所在的格子就是 4×4 的<b>左上角</b>；带绿色描边与圆点的格子才放得下，幽灵只会出现在这些位置。每回合可以「移动＋落子」连招，也可以直接落子。";
 function resetUi(){
   ui={ move:false, srcBox:null, ghost:null, ghostMv:null, hoverSrc:null };
-  setTip(TIP_DEFAULT);
+  setTip(state && state.mustPlace
+    ? "移动完成 —— 同回合内你还要<b>再落一个 4×4</b>，落完才轮到对手。"
+    : TIP_DEFAULT);
 }
 function setTip(html, bad){
   const t=document.getElementById("boardTip");
@@ -536,9 +611,12 @@ function tipErr(msg){
 function renderStatus(){
   const sb=document.getElementById("statusBar");
   const anchors = allAnchors().length;
+  const phase = state.mustPlace
+    ? ` · <b style="color:var(--accent)">移动后 · 须再落一子</b>`
+    : "";
   sb.innerHTML = state.over
     ? `<b>${PLAYER_NAMES[state.winner]} 获胜（第 ${state.round} 回合）</b>`
-    : `第 ${state.round} 回合 · 轮到 <b>${PLAYER_NAMES[state.current]}</b> · 可落锚点 <b style="color:${anchors? 'var(--ok)':'var(--bad)'}">${anchors}</b>`;
+    : `第 ${state.round} 回合 · 轮到 <b>${PLAYER_NAMES[state.current]}</b>${phase} · 可落锚点 <b style="color:${anchors? 'var(--ok)':'var(--bad)'}">${anchors}</b>`;
 }
 function showWin(){
   const p=state.winner;

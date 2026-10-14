@@ -327,12 +327,14 @@ function commitAction(){
   advance();
 }
 
-/* ---- AI（r2.3）----
-   每回合两种打法：
-     A) 直接落一个 4×4，结束回合
-     B) 先「移动」对手方块，再落一个 4×4 —— 同一回合完成
-   评分 = 自己剩余可落锚点数 ×1000 + 最大连通空域（前者才是胜负判据）。
-   B 要花 1 个 token，只有收益超过 AI_MOVE_COST 时才值得。            */
+/* ---- AI（r2.4）----
+   三层结构：
+     1) 基础评分 scoreState = 锚点总数 ×1000 + 最大连通空域
+        （双方同形，锚点公共，anchorsOn 分不出敌我，只能衡量空间）
+     2) 候选生成：直接落子(~81 个) + 「移动+落子」连招（粗筛 Top-K 再深搜），
+        连招要挣回 token 机会成本 AI_MOVE_COST 才值得
+     3) 战术层 oppThreat（只看胜负级事件）：
+        一手让对手无路 = 致胜手 (+WIN_TACTIC)，走出被将死的招 = (-WIN_TACTIC)  */
 const AI_MOVE_COST = 6;   // 移动的机会成本，单位＝格数
 const AI_TOPK = 8;        // 只对即时收益最好的 K 个移动候选做「移动+落子」深度搜索
 
@@ -349,8 +351,8 @@ function canPlaceOn(s,r,c){
   for(let dr=0;dr<P;dr++)for(let dc=0;dc<P;dc++) if(s.board[r+dr][c+dc]) return false;
   return true;
 }
-function placeOn(s,r,c){          // 原地修改模拟状态
-  anchorCells(r,c).forEach(([rr,cc])=> s.board[rr][cc]={boxId:"sim",owner:1});
+function placeOn(s,r,c,owner){    // 原地修改模拟状态（AI=1，模拟对手落子传 0）
+  anchorCells(r,c).forEach(([rr,cc])=> s.board[rr][cc]={boxId:"sim",owner:owner===undefined?1:owner});
   return s;
 }
 function simMove(boxId,r,c){
@@ -376,6 +378,49 @@ function scoreAfter(s){                // 局面里最大的一块连通空域
   return max;
 }
 function scoreState(s){ return anchorsOn(s)*1000 + scoreAfter(s); }
+/* ---- 战术层：一层对手回应 ----
+   关键事实：双方方块同形，锚点是公共的 —— anchorsOn 分不出敌我，
+   真正的攻防在「轮到谁时空间枯竭」。所以战术层只看胜负级事件：
+     · 我这一手让对手无路（无落位且搬不出）→ 致胜手，巨大加分
+     · 我这一手后对手存在反击让我无路     → 被将死，巨大减分   */
+function anchorsList(s){
+  const res=[];
+  for(let r=0;r<MAXA;r++)for(let c=0;c<MAXA;c++){
+    let ok=true;
+    for(let dr=0;dr<P&&ok;dr++)for(let dc=0;dc<P&&ok;dc++) if(s.board[r+dr][c+dc]) ok=false;
+    if(ok) res.push([r,c]);
+  }
+  return res;
+}
+function canEscape(s,player){     // player 当前无落位：能否靠「移动」开出落位
+  if(s.players[player].moves<=0) return false;
+  for(const b of Object.values(s.placed)){
+    if(b.owner!==1-player) continue;
+    for(const [r,c] of anchorsList(s)){
+      let ok=true;
+      for(const [rr,cc] of anchorCells(r,c)){ const cell=s.board[rr][cc]; if(cell && cell.boxId!==b.boxId){ ok=false; break; } }
+      if(!ok) continue;
+      const s2=cloneState(s);
+      const bb=s2.placed[b.boxId];
+      bb.cells.forEach(([rr,cc])=> s2.board[rr][cc]=null);
+      anchorCells(r,c).forEach(([rr,cc])=> s2.board[rr][cc]={boxId:b.boxId,owner:bb.owner});
+      if(anchorsOn(s2)>0) return true;
+    }
+  }
+  return false;
+}
+const WIN_TACTIC = 100000;        // 战术层分值：直接决定取舍
+function oppThreat(s){            // s = 我方动作全部完成、即将轮到对手的局面
+  if(anchorsOn(s)===0){
+    return canEscape(s,0) ? 0 : WIN_TACTIC;            // 对手彻底无路 → 致胜
+  }
+  // 对手是否存在一手让我陷入死局
+  for(const [r,c] of anchorsList(s)){
+    const s2=placeOn(cloneState(s),r,c,0);
+    if(anchorsOn(s2)===0 && !canEscape(s2,1)) return -WIN_TACTIC;   // 我被将死
+  }
+  return 0;
+}
 function bestFollowUp(s){          // 给定局面下，AI 自己能落的最佳位置
   let ret=null;
   for(let r=0;r<MAXA;r++)for(let c=0;c<MAXA;c++){
@@ -385,47 +430,54 @@ function bestFollowUp(s){          // 给定局面下，AI 自己能落的最佳
   }
   return ret;
 }
-function aiPlan(){
-  let direct=null;
+function aiCandidates(){
+  const list=[];
   for(const [r,c] of allAnchors()){
-    const sc=scoreState(placeOn(cloneState(state),r,c));
-    if(!direct || sc>direct.score) direct={r,c,score:sc};
+    const s1=placeOn(cloneState(state),r,c);
+    list.push({type:'place', r, c, sAfter:s1, score:scoreState(s1)});
   }
-  let combo=null;
   if(canMoveNow(1)){
-    const cands=[];
+    const rough=[];
     for(const b of oppBoxes(1)) for(const [mr,mc] of safeMoveTargets(b.boxId)){
       const s1=simMove(b.boxId,mr,mc);
       if(anchorsOn(s1)===0) continue;              // 兜底：自杀式移动不应出现
-      cands.push({boxId:b.boxId, mr, mc, s1, sc:scoreState(s1)});
+      rough.push({boxId:b.boxId, mr, mc, s1, score:scoreState(s1)});
     }
-    cands.sort((x,y)=>y.sc-x.sc);                  // 粗筛后再深搜，避免组合爆炸
-    for(const cd of cands.slice(0,AI_TOPK)){
+    rough.sort((x,y)=>y.score-x.score);            // 粗筛后再深搜，避免组合爆炸
+    for(const cd of rough.slice(0,AI_TOPK)){
       const fu=bestFollowUp(cd.s1);
-      if(fu && (!combo || fu.score>combo.score)) combo={boxId:cd.boxId, mr:cd.mr, mc:cd.mc, pr:fu.r, pc:fu.c, score:fu.score};
+      if(fu) list.push({type:'combo', boxId:cd.boxId, mr:cd.mr, mc:cd.mc,
+                        pr:fu.r, pc:fu.c, sAfter:placeOn(cloneState(cd.s1),fu.r,fu.c), score:fu.score});
     }
   }
-  return {direct, combo};
+  return list;
 }
+const AI_LOOKAHEAD = 4;   // 只对基础分最高的 N 个候选做对手回应检查
 function aiTurn(){
   if(state.over) return;
-  const {direct, combo}=aiPlan();
-  const useCombo = combo && (!direct || combo.score - AI_MOVE_COST > direct.score);
-  if(useCombo){
+  const cands=aiCandidates();
+  if(!cands.length){ state.over=true; state.winner=0; render(); showWin(); return; }
+  cands.sort((x,y)=>y.score-x.score);
+  let best=null;
+  cands.forEach((cd,i)=>{
+    cd.final = cd.score - (cd.type==='combo'?AI_MOVE_COST:0)
+             + (i<AI_LOOKAHEAD ? oppThreat(cd.sAfter) : 0);   // 战术层只看头部候选
+    if(!best || cd.final>best.final) best=cd;
+  });
+  if(best.type==='combo'){
     snapshot();
-    if(doMove(1, combo.boxId, combo.mr, combo.mc)==="lost"){ resetUi(); return; }
+    if(doMove(1, best.boxId, best.mr, best.mc)==="lost"){ resetUi(); return; }
     state.mustPlace=true; resetUi(); render();
     setTimeout(()=>{
       // 若期间被悔棋/重开，状态已变，放弃这手
       if(state.over || state.current!==1 || !state.mustPlace) return;
-      if(!canPlaceOn(state, combo.pr, combo.pc)) return;
-      doPlace(1, combo.pr, combo.pc);
+      if(!canPlaceOn(state, best.pr, best.pc)) return;
+      doPlace(1, best.pr, best.pc);
       state.mustPlace=false; resetUi(); advance();
     }, 520);
     return;
   }
-  if(direct){ snapshot(); doPlace(1, direct.r, direct.c); resetUi(); advance(); return; }
-  state.over=true; state.winner=0; render(); showWin();
+  snapshot(); doPlace(1, best.r, best.c); resetUi(); advance();
 }
 
 /* ============================================================

@@ -127,6 +127,22 @@
     .grp-log{max-height:84px;}
   }
 
+  /* ——— 可折叠调参面板 ——— */
+  .grp-tune{align-items:flex-start;}
+  details.tune{width:100%;}
+  details.tune>summary{list-style:none; cursor:pointer; font-size:13px; font-weight:700; color:var(--dim); user-select:none; display:flex; align-items:center; gap:6px;}
+  details.tune>summary::-webkit-details-marker{display:none;}
+  details.tune>summary::before{content:"\25B8"; display:inline-block; transition:transform .15s; color:var(--dim);}
+  details.tune[open]>summary::before{transform:rotate(90deg);}
+  details.tune>summary:hover{color:var(--txt);}
+  .tuneBody{margin-top:10px; display:flex; flex-direction:column; gap:7px;}
+  .trow{display:flex; align-items:center; gap:8px; font-size:12px; color:var(--dim);}
+  .trow .nm{flex:1 1 auto; min-width:0; color:var(--txt); white-space:nowrap;}
+  .trow input[type=range]{flex:0 0 92px; width:92px; accent-color:var(--p0); cursor:pointer;}
+  .trow .val{flex:0 0 26px; text-align:right; color:var(--accent); font-variant-numeric:tabular-nums;}
+  .trow .chip{padding:3px 8px; font-size:12px;}
+  .tuneHint{font-size:11px; color:var(--dim); line-height:1.45;}
+
   button.btn{background:var(--p0d); color:#fff; border:none; border-radius:8px; padding:9px 14px; font-size:14px; cursor:pointer;}
   button.btn.ghost{background:transparent; border:1px solid var(--line); color:var(--txt);}
   button.btn.sm{padding:7px 11px; font-size:13px;}
@@ -147,7 +163,7 @@
   <header data-page-node-id="2FQCAgSFmACbQSyChHPbtE">
     <h1 data-page-node-id="VFM1doCkbzZPtqDydwivFO">📦 装箱对决 · 方块版</h1>
     <span class="tag" data-page-node-id="5EgoEZUfPDao1mgkUCaLgb">ruleset: packing-duel-r2.5</span>
-    <span class="tag" data-page-node-id="hoW6SjsUCYC21AEOgdJB96">12×12 · 4×4 · 放不下判负 · 移动可续落</span>
+    <span class="tag" id="cfgTag" data-page-node-id="hoW6SjsUCYC21AEOgdJB96">12×12 · 4×4 · 放不下判负 · 移动可续落</span>
   </header>
 
   <div class="main" data-page-node-id="yq8wqKabcFpaVZvnqUZnkW">
@@ -167,6 +183,24 @@
       <div class="grp grp-players" id="players" data-page-node-id="JsXcFmuQspGPH6HsragJ9H"></div>
       <div class="grp grp-status" id="statusBar" data-page-node-id="JmHshNLrogxnfy3ZSE0zeq"></div>
       <div class="grp grp-tip"><div class="tip" id="boardTip" data-page-node-id="I1wpaOKdTa2aQk9YitXiQs"></div></div>
+      <div class="grp grp-tune">
+        <details class="tune" id="tunePanel">
+          <summary>⚙ 调参面板</summary>
+          <div class="tuneBody">
+            <div class="trow"><span class="nm">棋盘边长</span><input type="range" id="tBS" min="12" max="18" step="1"><span class="val" id="vBS"></span></div>
+            <div class="trow"><span class="nm">方块边长</span><input type="range" id="tP" min="3" max="5" step="1"><span class="val" id="vP"></span></div>
+            <div class="trow"><span class="nm">每 N 次得 1 移动</span><input type="range" id="tME" min="1" max="4" step="1"><span class="val" id="vME"></span></div>
+            <div class="trow"><span class="nm">移动上限</span><input type="range" id="tMM" min="0" max="5" step="1"><span class="val" id="vMM"></span></div>
+            <div class="trow"><span class="nm">后手补偿</span><input type="range" id="tSS" min="0" max="3" step="1"><span class="val" id="vSS"></span></div>
+            <div class="trow"><span class="nm">AI 移动成本</span><input type="range" id="tMC" min="0" max="20" step="1"><span class="val" id="vMC"></span></div>
+            <div class="trow"><span class="nm">AI 粗筛 TopK</span><input type="range" id="tTK" min="1" max="16" step="1"><span class="val" id="vTK"></span></div>
+            <div class="trow"><span class="nm">AI 前瞻数</span><input type="range" id="tLA" min="0" max="12" step="1"><span class="val" id="vLA"></span></div>
+            <div class="trow"><span class="nm">音效</span><button class="chip" id="tSound">🔊 开</button><input type="range" id="tVol" min="0" max="100" step="5"><span class="val" id="vVol"></span></div>
+            <button class="btn ghost sm" id="tReset">恢复默认</button>
+            <div class="tuneHint">棋盘/方块尺寸与移动规则改动会立即重开一局；AI 参数即时生效。设置自动记忆。</div>
+          </div>
+        </details>
+      </div>
       <div class="grp grp-log"><div id="log" data-page-node-id="iUBnvFWAzKjnEamyxNii5m"></div></div>
     </div>
   </div>
@@ -189,16 +223,84 @@
    ============================================================ */
 const CONFIG = {
   ruleset_id: "packing-duel-r2.5",
-  boardSize: 12,
-  piece: 4,           // 清一色 4×4 大方块，无限个
-  moveEvery: 2,       // 每放 N 次得 1 个「移动」token
-  moveMax: 3,         // token 上限
-  secondStartMove: 1  // 后手开局补 1 个移动 token（平衡）
+  boardSize: 12,       // 棋盘边长 12–18（调参面板可调）
+  piece: 4,            // 方块边长 3–5（调参面板可调），无限个
+  moveEvery: 2,        // 每放 N 次得 1 个「移动」token
+  moveMax: 3,          // token 上限
+  secondStartMove: 1,  // 后手开局补 1 个移动 token（平衡）
 };
+const CONFIG_DEFAULTS = { ...CONFIG };   // 「恢复默认」用
 const PLAYER_NAMES_HOT = ["蓝方", "红方"];   // 双人对阵：红蓝玩家
 const PLAYER_NAMES_AI  = ["你",  "对手"];   // 对战 AI：你 / 对手
 function nameOf(p){ return (mode==="ai" ? PLAYER_NAMES_AI : PLAYER_NAMES_HOT)[p]; }
-const BS = CONFIG.boardSize, P = CONFIG.piece, MAXA = BS - P + 1; // 锚点 0..8
+// BS / P / MAXA 由 CONFIG 推导；改棋盘或方块大小后必须调用 recalcDims()
+let BS, P, MAXA;
+function recalcDims(){ BS = CONFIG.boardSize; P = CONFIG.piece; MAXA = BS - P + 1; }
+recalcDims();
+
+/* ============================================================
+   音效：Web Audio 实时合成（零外部资源，离线可用）
+   注意浏览器自动播放策略：AudioContext 须在首个用户手势后才能 resume
+   ============================================================ */
+const Sfx = (function(){
+  let ctx=null, master=null, on=true, vol=0.5;
+  function ctxGet(){
+    if(ctx) return ctx;
+    try{
+      if(typeof window==="undefined") return null;              // node 冒烟测试环境无 window
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if(!AC) return null;
+      ctx = new AC();
+      master = ctx.createGain();
+      master.gain.value = vol;
+      master.connect(ctx.destination);
+    }catch(e){ ctx=null; }
+    return ctx;
+  }
+  function resume(){ const c=ctxGet(); if(c && c.state==="suspended") c.resume(); }
+  // 单音 o = {f 起始频率, to 终止频率(可选·滑音), type 波形, dur 时长, gain 音量, delay 延迟}
+  function note(o){
+    if(!on) return;
+    const c=ctxGet(); if(!c) return;
+    const dur=o.dur||0.15, t0=c.currentTime+(o.delay||0);
+    const osc=c.createOscillator(), g=c.createGain();
+    osc.type=o.type||"sine";
+    osc.frequency.setValueAtTime(o.f, t0);
+    if(o.to) osc.frequency.exponentialRampToValueAtTime(Math.max(1,o.to), t0+dur);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(Math.max(0.0002,o.gain||0.25), t0+0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0+dur);
+    osc.connect(g); g.connect(master);
+    osc.start(t0); osc.stop(t0+dur+0.03);
+  }
+  return {
+    resume,
+    setOn(v){ on=!!v; },
+    isOn(){ return on; },
+    setVol(v){ vol=v; if(master) master.gain.value=v; },
+    getVol(){ return vol; },
+    place(p){                                    // 落子：短促「啪」，双方音高不同便于分辨
+      const lo = p ? 300 : 380;
+      note({f: lo,   to: lo*0.62, type:"triangle", dur:0.13, gain:0.22});
+      note({f: lo*2, to: lo*1.5,  type:"sine",     dur:0.09, gain:0.10, delay:0.01});
+    },
+    move(){                                      // 搬运：上滑音
+      note({f:200, to:560, type:"sawtooth", dur:0.24, gain:0.12});
+    },
+    token(){                                     // 获得移动 token：明亮双音
+      note({f:880,  type:"sine", dur:0.10, gain:0.16});
+      note({f:1320, type:"sine", dur:0.15, gain:0.13, delay:0.09});
+    },
+    nope(){                                      // 非法操作：低沉短促
+      note({f:150, to:90, type:"square", dur:0.16, gain:0.13});
+    },
+    click(){                                     // UI 点击
+      note({f:680, type:"sine", dur:0.05, gain:0.09});
+    },
+    win(){  [523,659,784,1047].forEach((f,i)=>note({f, type:"triangle", dur:0.28, gain:0.19, delay:i*0.10})); },
+    lose(){ [392,330,262,196].forEach((f,i)=>note({f, type:"sawtooth", dur:0.34, gain:0.14, delay:i*0.13})); }
+  };
+})();
 
 /* ============================================================
    状态
@@ -305,11 +407,14 @@ function doPlace(p, r, c){
   state.placed[id] = { boxId:id, owner:p, cells, locked:false };
   cells.forEach(([rr,cc])=> state.board[rr][cc]={ boxId:id, owner:p });
   state.players[p].placedCount++;
+  const SZ = `${P}×${P}`;
   if(state.players[p].placedCount % CONFIG.moveEvery === 0 && state.players[p].moves < CONFIG.moveMax){
     state.players[p].moves++;
-    log(`<span class="p${p}c">${nameOf(p)}</span> 放下一个 4×4 于 (${r+1},${c+1})，获得 1 个移动 token`);
+    log(`<span class="p${p}c">${nameOf(p)}</span> 放下一个 ${SZ} 于 (${r+1},${c+1})，获得 1 个移动 token`);
+    Sfx.place(p); Sfx.token();
   } else {
-    log(`<span class="p${p}c">${nameOf(p)}</span> 放下一个 4×4 于 (${r+1},${c+1})`);
+    log(`<span class="p${p}c">${nameOf(p)}</span> 放下一个 ${SZ} 于 (${r+1},${c+1})`);
+    Sfx.place(p);
   }
 }
 function doMove(player, boxId, r, c){
@@ -319,7 +424,8 @@ function doMove(player, boxId, r, c){
   b.cells = cells;
   cells.forEach(([rr,cc])=> state.board[rr][cc]={ boxId, owner:b.owner });
   state.players[player].moves--;
-  log(`<span class="p${player}c">${nameOf(player)}</span> 把对手的 4×4 搬到 (${r+1},${c+1})`);
+  log(`<span class="p${player}c">${nameOf(player)}</span> 把对手的 ${P}×${P} 搬到 (${r+1},${c+1})`);
+  Sfx.move();
   // 核心判定：移动后若仍无落位，该玩家直接判负
   if(!canPlaceAny()){
     state.over = true;
@@ -361,7 +467,7 @@ function advance(){
   }
   // 无法放置但有移动 token：只有这一条路，且移动后得立刻补落一手
   if(!canPlaceAny() && canMoveNow(state.current)){
-    setTip("放不下 4×4 了：只剩「移动」这一条路 —— 搬开对手方块后，你得能<b>立刻补落一个</b>，否则判负。", true);
+    setTip(`放不下 ${P}×${P} 了：只剩「移动」这一条路 —— 搬开对手方块后，你得能<b>立刻补落一个</b>，否则判负。`, true);
   }
   render();
   if(mode==="ai" && state.current===1 && !state.over){
@@ -385,8 +491,8 @@ function commitAction(){ advance(); }   // 仅推进回合；快照须由调用�
         连招要挣回 token 机会成本 AI_MOVE_COST 才值得
      3) 战术层 oppThreat（只看胜负级事件）：
         一手让对手无路 = 致胜手 (+WIN_TACTIC)，走出被将死的招 = (-WIN_TACTIC)  */
-const AI_MOVE_COST = 6;   // 移动的机会成本，单位＝格数
-const AI_TOPK = 8;        // 只对即时收益最好的 K 个移动候选做「移动+落子」深度搜索
+let AI_MOVE_COST = 6;   // 移动的机会成本，单位＝格数（调参面板可调）
+let AI_TOPK = 8;        // 只对即时收益最好的 K 个移动候选做「移动+落子」深度搜索（可调）
 
 function anchorsOn(s){
   let n=0;
@@ -505,7 +611,7 @@ function aiCandidates(){
   }
   return list;
 }
-const AI_LOOKAHEAD = 4;   // 只对基础分最高的 N 个候选做对手回应检查
+let AI_LOOKAHEAD = 4;    // 只对基础分最高的 N 个候选做对手回应检查（调参面板可调）
 function aiTurn(){
   if(state.over) return;
   const cands=aiCandidates();
@@ -541,6 +647,8 @@ const boardEl=document.getElementById("board");
 function render(){ renderBoard(); renderPlayers(); renderStatus(); paintGhost(); fitBoard(); }
 let _mvCache={};
 function renderBoard(){
+  boardEl.style.gridTemplateColumns = `repeat(${BS},1fr)`;
+  boardEl.style.gridTemplateRows    = `repeat(${BS},1fr)`;
   boardEl.innerHTML="";
   _mvCache={};
   const boundsCache={};
@@ -653,7 +761,7 @@ function onCellClick(r,c){
   if(state.mustPlace){
     if(ui.move){ ui.move=false; ui.srcBox=null; }
     if(state.board[r][c]){ tipErr("这里已经有方块了"); return; }
-    if(!validAnchor(r,c)){ tipErr("这里放不下 4×4：请选择<b>带绿色圆点</b>的格子"); return; }
+    if(!validAnchor(r,c)){ tipErr(`这里放不下 ${P}×${P}：请选择<b>带绿色圆点</b>的格子`); return; }
     snapshot(); doPlace(p, r, c); state.mustPlace=false; resetUi(); advance(); return;
   }
   if(ui.move){
@@ -675,7 +783,7 @@ function onCellClick(r,c){
         resetUi();
         if(res==="lost") return;                     // 移动后仍无落位：直接判负
         state.mustPlace=true;                        // 本回合还能再落一个方块
-        setTip("移动完成 —— 同回合内你还要<b>再落一个 4×4</b>，落完才轮到对手。");
+        setTip(mustPlaceTip());
         render(); return;
       }
       tipErr("那里搬不过去：只能搬到<b>金色高亮</b>的空位");
@@ -684,7 +792,7 @@ function onCellClick(r,c){
   }
   if(state.board[r][c]){ tipErr("这里已经有方块了"); return; }
   if(!validAnchor(r,c)){
-    tipErr(`这里放不下 4×4：以 (${r+1},${c+1}) 为左上角会越界或被占。请选择<b>带绿色圆点</b>的格子`);
+    tipErr(`这里放不下 ${P}×${P}：以 (${r+1},${c+1}) 为左上角会越界或被占。请选择<b>带绿色圆点</b>的格子`);
     return;
   }
   snapshot(); doPlace(p, r, c); resetUi(); advance();
@@ -722,12 +830,12 @@ function flash(btn,msg){
   const old=btn.textContent; btn.textContent=msg; btn.style.background="var(--bad)";
   setTimeout(()=>{ btn.textContent=old; btn.style.background=""; },900);
 }
-const TIP_DEFAULT = "鼠标格 = 4×4 左上角；绿框圆点格方可落子。";
+// 提示语会随方块尺寸变化，故做成函数而非常量
+function defaultTip(){   return `鼠标格 = ${P}×${P} 左上角；绿框圆点格方可落子。`; }
+function mustPlaceTip(){ return `移动完成 —— 同回合内你还要<b>再落一个 ${P}×${P}</b>，落完才轮到对手。`; }
 function resetUi(){
   ui={ move:false, srcBox:null, ghost:null, ghostMv:null, hoverSrc:null };
-  setTip(state && state.mustPlace
-    ? "移动完成 —— 同回合内你还要<b>再落一个 4×4</b>，落完才轮到对手。"
-    : TIP_DEFAULT);
+  setTip(state && state.mustPlace ? mustPlaceTip() : defaultTip());
 }
 function setTip(html, bad){
   const t=document.getElementById("boardTip");
@@ -737,8 +845,9 @@ function setTip(html, bad){
 let tipTimer=null;
 function tipErr(msg){
   setTip(msg, true);
+  Sfx.nope();                                   // 非法操作给一声否定音
   clearTimeout(tipTimer);
-  tipTimer=setTimeout(()=>setTip(TIP_DEFAULT), 1600);
+  tipTimer=setTimeout(()=>setTip(defaultTip()), 1600);
 }
 function renderStatus(){
   const sb=document.getElementById("statusBar");
@@ -756,7 +865,8 @@ function showWin(){
   document.getElementById("winTitle").textContent =
     mode==="hot" ? `🎉 ${nameOf(p)} 获胜` : (p===0?"🎉 你赢了":"🤝 对手获胜");
   document.getElementById("winDesc").textContent =
-    `第 ${state.round} 回合，${nameOf(1-p)} 已放不下任何 4×4，${nameOf(p)} 获胜。`;
+    `第 ${state.round} 回合，${nameOf(1-p)} 已放不下任何 ${P}×${P}，${nameOf(p)} 获胜。`;
+  if(mode==="hot" || p===0) Sfx.win(); else Sfx.lose();   // 热座一律凯旋音；对战 AI 输赢分明
 }
 
 /* ============================================================
@@ -770,7 +880,7 @@ function startGame(){
   document.getElementById("log").innerHTML="";
   resetUi();
   render();
-  log("对局开始：12×12 棋盘，双方无限个 4×4，放不下的一方判负。","");
+  log(`对局开始：${BS}×${BS} 棋盘，双方无限个 ${P}×${P}，放不下的一方判负。`,"");
 }
 document.getElementById("btnRestart").addEventListener("click", startGame);
 document.getElementById("btnUndo").addEventListener("click", undo);
@@ -815,6 +925,115 @@ function setModeSel(){
 document.addEventListener("keydown", e=>{
   if(e.key==="Escape"){ resetUi(); render(); }
 });
+
+/* ============================================================
+   调参面板：规则与 AI 参数全部开放
+   · 棋盘边长 / 方块边长 / 移动规则：改完重开一局（棋盘要重建）
+   · AI 参数：下一次 aiTurn 立即生效
+   · 全部写入 localStorage，刷新后自动恢复
+   ============================================================ */
+const TUNE_KEY = "packing-duel-tune-v1";
+function gid(id){ return document.getElementById(id); }
+function clampNum(v, lo, hi){ v = Number(v); return (!isFinite(v)) ? lo : (v<lo?lo : v>hi?hi : v); }
+function tuneSet(inId, valId, val){
+  const a = gid(inId), b = gid(valId);
+  if(a) a.value = String(val);
+  if(b) b.textContent = String(val);
+}
+function saveTune(){
+  try{
+    localStorage.setItem(TUNE_KEY, JSON.stringify({
+      cfg: CONFIG, look: AI_LOOKAHEAD, topk: AI_TOPK, cost: AI_MOVE_COST,
+      sound: Sfx.isOn(), vol: Sfx.getVol()
+    }));
+  }catch(e){}                                        // node 环境无 localStorage
+}
+function loadTune(){
+  try{
+    const raw = localStorage.getItem(TUNE_KEY); if(!raw) return;
+    const o = JSON.parse(raw); if(!o || !o.cfg) return;
+    CONFIG.boardSize       = clampNum(o.cfg.boardSize, 12, 18);
+    CONFIG.piece           = clampNum(o.cfg.piece, 3, 5);
+    CONFIG.moveEvery       = clampNum(o.cfg.moveEvery, 1, 4);
+    CONFIG.moveMax         = clampNum(o.cfg.moveMax, 0, 5);
+    CONFIG.secondStartMove = clampNum(o.cfg.secondStartMove, 0, 3);
+    AI_LOOKAHEAD = clampNum(o.look, 0, 12);
+    AI_TOPK      = clampNum(o.topk, 1, 16);
+    AI_MOVE_COST = clampNum(o.cost, 0, 20);
+    Sfx.setOn(o.sound !== false);
+    Sfx.setVol(o.vol != null ? clampNum(o.vol, 0, 1) : 0.5);   // 缺省保持默认音量，别被静音
+    recalcDims();
+  }catch(e){}
+}
+function syncTuneUI(){
+  tuneSet("tBS","vBS", CONFIG.boardSize);
+  tuneSet("tP", "vP",  CONFIG.piece);
+  tuneSet("tME","vME", CONFIG.moveEvery);
+  tuneSet("tMM","vMM", CONFIG.moveMax);
+  tuneSet("tSS","vSS", CONFIG.secondStartMove);
+  tuneSet("tMC","vMC", AI_MOVE_COST);
+  tuneSet("tTK","vTK", AI_TOPK);
+  tuneSet("tLA","vLA", AI_LOOKAHEAD);
+  tuneSet("tVol","vVol", Math.round(Sfx.getVol()*100));
+  const sb = gid("tSound");
+  if(sb){
+    sb.textContent = Sfx.isOn() ? "🔊 开" : "🔇 关";
+    sb.classList.toggle("off", !Sfx.isOn());
+  }
+  const tag = gid("cfgTag");
+  if(tag) tag.textContent = `${BS}×${BS} · ${P}×${P} · 放不下判负 · 移动可续落`;
+}
+// 棋盘/方块/移动规则：拖动中只刷读数，松手(change)才重开，避免频繁重建
+[["tBS","boardSize"],["tP","piece"],["tME","moveEvery"],["tMM","moveMax"],["tSS","secondStartMove"]]
+.forEach(([id, key])=>{
+  const el = gid(id); if(!el) return;
+  el.addEventListener("input", ()=>{ gid("v"+id.slice(1)).textContent = el.value; });
+  el.addEventListener("change", ()=>{
+    CONFIG[key] = Number(el.value);
+    recalcDims(); syncTuneUI(); saveTune(); Sfx.click(); startGame();
+  });
+});
+// AI 参数：下一次 AI 出手即生效，无需重开
+[["tMC", v=>AI_MOVE_COST=v], ["tTK", v=>AI_TOPK=v], ["tLA", v=>AI_LOOKAHEAD=v]]
+.forEach(([id, setter])=>{
+  const el = gid(id); if(!el) return;
+  el.addEventListener("input", ()=>{
+    setter(Number(el.value)); gid("v"+id.slice(1)).textContent = el.value;
+    syncTuneUI(); saveTune();
+  });
+});
+(()=>{                                               // 音量（松手试听一声）
+  const el = gid("tVol"); if(!el) return;
+  el.addEventListener("input",  ()=>{ Sfx.setVol(Number(el.value)/100); gid("vVol").textContent = el.value; saveTune(); });
+  el.addEventListener("change", ()=> Sfx.click());
+})();
+(()=>{                                               // 音效开关
+  const el = gid("tSound"); if(!el) return;
+  el.addEventListener("click", ()=>{
+    Sfx.setOn(!Sfx.isOn()); syncTuneUI(); saveTune();
+    if(Sfx.isOn()) Sfx.click();                      // 刚打开时给一声确认
+  });
+})();
+(()=>{                                               // 恢复默认
+  const el = gid("tReset"); if(!el) return;
+  el.addEventListener("click", ()=>{
+    Object.assign(CONFIG, CONFIG_DEFAULTS);
+    AI_LOOKAHEAD = 4; AI_TOPK = 8; AI_MOVE_COST = 6;
+    recalcDims(); syncTuneUI(); saveTune(); Sfx.click(); startGame();
+  });
+})();
+// UI 点击统一「嗒」声（捕获阶段，早于业务处理）
+document.addEventListener("click", e=>{
+  const t = e.target;
+  if(t && t.closest && t.closest("button, summary, .chip, .modeSel span")) Sfx.click();
+}, true);
+// 浏览器要求首个用户手势之后才允许出声
+["pointerdown","touchstart","keydown"].forEach(ev=>
+  document.addEventListener(ev, ()=> Sfx.resume(), {passive:true})
+);
+
+loadTune();
+syncTuneUI();
 
 startGame();
 </script>

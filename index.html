@@ -33,8 +33,7 @@
   header h1{font-size:clamp(17px,4.6vw,22px); letter-spacing:1px;}
   .tag{font-size:11px; color:var(--dim); background:var(--panel); padding:3px 8px; border-radius:20px; white-space:nowrap;}
   #statusBar{flex:1; text-align:right; font-size:clamp(12px,3.2vw,14px); color:var(--dim); min-width:120px;}
-  .layout{display:flex; gap:10px; flex:1 1 auto; min-height:0;}
-  @media (max-width:760px){ .layout{flex-direction:column;} }
+  .main{display:flex; gap:8px; flex:1 1 auto; min-height:0;}
 
   .boardWrap{
     background:var(--panel); border-radius:14px; padding:10px; position:relative;
@@ -43,8 +42,8 @@
   }
   .board{
     display:grid; grid-template-columns:repeat(12,1fr); grid-template-rows:repeat(12,1fr);
-    aspect-ratio:1/1; width:min(100%, 80vh); max-width:100%; max-height:100%;
-    gap:1px; background:var(--panel2); border:1px solid var(--line); border-radius:8px; padding:1px;
+    aspect-ratio:1/1; width:auto; height:auto; max-width:100%; max-height:100%;
+    gap:2px; background:var(--panel2); border:1px solid var(--line); border-radius:8px; padding:2px;
     touch-action:none;                 /* 棋盘上禁手势，避免拖动页面 */
   }
   .cell{position:relative; border-radius:2px; background:#1c2638; transition:background .06s;}
@@ -57,8 +56,19 @@
     content:""; position:absolute; left:50%; top:50%; width:5px; height:5px;
     transform:translate(-50%,-50%); border-radius:50%; background:rgba(53,208,127,.9); pointer-events:none;
   }
-  .cell.placed0{background:var(--p0); box-shadow:inset 0 0 0 1px var(--p0d);}
-  .cell.placed1{background:var(--p1); box-shadow:inset 0 0 0 1px var(--p1d);}
+  .cell.placed0{background:var(--p0);}
+  .cell.placed1{background:var(--p1);}
+  /* 落下方块：内部保留 2px 间隙作为淡淡方格线；块边界用 2px 深色线填在间隙里，更显著 */
+  .cell{--edge:transparent;}
+  .cell.placed0{--edge:var(--p0d);}
+  .cell.placed1{--edge:var(--p1d);}
+  .cell.placed0, .cell.placed1{border-radius:0; position:relative;}
+  .cell.edge-t::before, .cell.edge-b::before{content:""; position:absolute; left:0; right:0; height:2px; background:var(--edge); pointer-events:none; z-index:2;}
+  .cell.edge-t::before{top:-2px;}
+  .cell.edge-b::before{bottom:-2px;}
+  .cell.edge-l::after, .cell.edge-r::after{content:""; position:absolute; top:0; bottom:0; width:2px; background:var(--edge); pointer-events:none; z-index:2;}
+  .cell.edge-l::after{left:-2px;}
+  .cell.edge-r::after{right:-2px;}
   .cell.mvsrc{border:2px solid var(--accent); cursor:pointer;}
   .cell.mvsrc:hover{background:#7a6426;}
   .cell.mvnomove{outline:2px dashed rgba(255,209,102,.4); outline-offset:-3px;}  /* 对手方块但无安全落点：仍可点，点了解释原因 */
@@ -76,34 +86,46 @@
   .cell.ghostmv.origin{box-shadow:inset 0 0 0 3px #ffe29a;}
   .cell.hoverSrc{outline:2px dashed var(--accent); outline-offset:-3px;}
 
-  .panel{background:var(--panel); border-radius:14px; padding:12px; flex:0 0 320px; max-width:42%; overflow:auto; touch-action:pan-y;}
-  @media (max-width:760px){ .panel{flex:0 0 auto; max-width:100%; max-height:38%;} }
-  .panel h3{font-size:14px; color:var(--dim); margin-bottom:8px; letter-spacing:1px; border-bottom:1px solid var(--line); padding-bottom:6px;}
-  .playerCard{border:1px solid var(--line); border-radius:10px; padding:10px; margin-bottom:10px; background:var(--panel2);}
-  .playerCard.active{box-shadow:0 0 0 2px var(--accent);}
-  .pname{font-weight:700; font-size:15px; display:flex; justify-content:space-between; align-items:center;}
-  .pname .count{font-size:12px; color:var(--dim);}
-  .pieceInfo{display:flex; align-items:center; gap:8px; margin-top:10px;}
-  .sq{display:grid; grid-template-columns:repeat(4,12px); grid-template-rows:repeat(4,12px); gap:0;}  /* 4×4 预览去掉中间间隔，读成一整块 */
-  .sq i{width:12px; height:12px; border-radius:1px; background:#33405e;}
-  .sq i.f0{background:var(--p0);} .sq i.f1{background:var(--p1);}
-  .pieceInfo .txt{font-size:13px; color:var(--dim); line-height:1.5;}
-  .prow{display:flex; align-items:center; justify-content:space-between; margin-top:10px; gap:8px;}
-  .prow .label{font-size:13px; color:var(--dim);}
+  /* ——— 合并信息条：横屏放棋盘右侧成一列 / 竖屏放棋盘下方成一行 ——— */
+  .infobar{
+    display:flex; flex-direction:column; gap:8px;
+    flex:0 0 320px; max-width:42%;
+    align-items:stretch;
+  }
+  .grp{background:var(--panel); border-radius:10px; padding:8px 10px; display:flex; align-items:center; gap:8px; width:100%;}
+  .grp-ctrl{gap:6px;}
+  .grp-players{justify-content:space-around; gap:10px; padding:6px 10px;}
+  .grp-status{flex:1 1 auto; min-width:0; font-size:12px; color:var(--dim); line-height:1.45;}
+  .grp-status b{color:var(--txt);}
+  .grp-tip{align-items:flex-start;}
+  .grp-log{flex-direction:column; align-items:stretch; gap:4px; max-height:66px;}
+  .pcard{display:flex; align-items:center; gap:6px; padding:4px 8px; border-radius:8px; border:1px solid transparent; font-size:13px; white-space:nowrap;}
+  .pcard.active{background:var(--panel2); border-color:var(--accent);}
+  .pcard .dot{width:12px; height:12px; border-radius:3px; flex:0 0 auto;}
+  .pcard.f0 .dot{background:var(--p0);} .pcard.f1 .dot{background:var(--p1);}
+  .pcard .pn{font-weight:700;}
+  .pcard .pc{color:var(--dim); font-size:12px;}
+  .pcard .chip{padding:3px 9px; font-size:12px; border-radius:6px;}
   .chip{font-size:13px; padding:5px 12px; border-radius:6px; border:1px solid var(--line); cursor:pointer; background:var(--panel2);}
   .chip.ready{background:var(--p0d); color:#fff; border-color:var(--p0d);}
   .chip.live{background:var(--accent); color:#222; border-color:var(--accent);}
   .chip.off{opacity:.35; cursor:not-allowed;}
-  .mustTip{margin-top:8px; font-size:12px; line-height:1.5; color:var(--accent);
-    background:rgba(255,209,102,.12); border:1px solid rgba(255,209,102,.45); border-radius:6px; padding:5px 8px;}
-  .tip{font-size:12px; color:var(--dim); margin-top:8px; line-height:1.6;}
-
-  #log{max-height:130px; overflow-y:auto; font-size:12px; color:var(--dim); margin-top:6px;}
+  .mustTip{font-size:11px; line-height:1.3; color:var(--accent);
+    background:rgba(255,209,102,.12); border:1px solid rgba(255,209,102,.45); border-radius:6px; padding:2px 6px;}
+  .tip{font-size:12px; color:var(--dim); line-height:1.5;}
+  #log{max-height:48px; overflow-y:auto; font-size:11px; color:var(--dim); width:100%;}
   #log .t{color:var(--txt);} #log .p0c{color:var(--p0);} #log .p1c{color:var(--p1);}
+
+  @media (orientation:portrait){
+    .main{flex-direction:column;}
+    .infobar{flex-direction:row; flex-wrap:wrap; flex:0 0 auto; max-width:100%; align-items:stretch;}
+    .grp{width:auto; flex:1 1 200px;}
+    .grp-log{max-height:84px;}
+  }
 
   button.btn{background:var(--p0d); color:#fff; border:none; border-radius:8px; padding:9px 14px; font-size:14px; cursor:pointer;}
   button.btn.ghost{background:transparent; border:1px solid var(--line); color:var(--txt);}
-  .topRow{display:flex; gap:8px; flex-wrap:wrap;}
+  button.btn.sm{padding:7px 11px; font-size:13px;}
   .modeSel{display:flex; gap:6px;}
   .modeSel span{font-size:13px; color:var(--dim); cursor:pointer; padding:5px 10px; border:1px solid var(--line); border-radius:20px;}
   .modeSel span.on{background:var(--accent); color:#222; border-color:var(--accent);}
@@ -122,29 +144,26 @@
     <h1 data-page-node-id="VFM1doCkbzZPtqDydwivFO">📦 装箱对决 · 方块版</h1>
     <span class="tag" data-page-node-id="5EgoEZUfPDao1mgkUCaLgb">ruleset: packing-duel-r2.5</span>
     <span class="tag" data-page-node-id="hoW6SjsUCYC21AEOgdJB96">12×12 · 4×4 · 放不下判负 · 移动可续落</span>
-    <div id="statusBar" data-page-node-id="JmHshNLrogxnfy3ZSE0zeq"></div>
   </header>
 
-  <div class="layout" data-page-node-id="yq8wqKabcFpaVZvnqUZnkW">
+  <div class="main" data-page-node-id="yq8wqKabcFpaVZvnqUZnkW">
     <div class="boardWrap" data-page-node-id="qx6XJ4rtmLda46XSmuotqq">
-      <div class="topRow" data-page-node-id="2LVRVqdDT3of3Bc0TXMEmH">
+      <div class="board" id="board" data-page-node-id="vakH5LMdJ7i73MmHuGTRbu"></div>
+    </div>
+
+    <div class="infobar" data-page-node-id="Q6hSKLOSTNzF19jv2Jrxlm">
+      <div class="grp grp-ctrl" data-page-node-id="2LVRVqdDT3of3Bc0TXMEmH">
         <div class="modeSel" data-page-node-id="GYH998NMEVhVe1ZZrgW2Fp">
           <span id="mAI" class="on" data-page-node-id="muxTpP4skzxcVjErJ7Vqdb">对战 AI</span>
           <span id="mHot" data-page-node-id="G5pZTEEbPYEv1qfXzMWz3o">双人热座</span>
         </div>
-        <button class="btn ghost" id="btnRestart" data-page-node-id="IxYoVn7j23nCpb3OIbFjNJ">重新开局</button>
-        <button class="btn ghost" id="btnUndo" data-page-node-id="ZrnR6OOn9XJdrgsgbNzDeo">悔棋</button>
+        <button class="btn ghost sm" id="btnRestart" data-page-node-id="IxYoVn7j23nCpb3OIbFjNJ">重开</button>
+        <button class="btn ghost sm" id="btnUndo" data-page-node-id="ZrnR6OOn9XJdrgsgbNzDeo">悔棋</button>
       </div>
-      <div class="board" id="board" data-page-node-id="vakH5LMdJ7i73MmHuGTRbu"></div>
-      <div class="tip" id="boardTip" data-page-node-id="I1wpaOKdTa2aQk9YitXiQs">鼠标所在的格子就是 4×4 的<b data-page-node-id="eDQvhDQ9LGbD0mXs1cNQBp">左上角</b>；带绿色描边与圆点的格子才放得下，幽灵只会出现在这些位置。每回合可以「移动＋落子」连招，也可以直接落子。</div>
-    </div>
-
-    <div class="panel" data-page-node-id="Q6hSKLOSTNzF19jv2Jrxlm">
-      <h3 data-page-node-id="Ktf4iqgUjXkewPO0ddZixz">操作台</h3>
-      <div id="p0card" class="playerCard" data-page-node-id="JsXcFmuQspGPH6HsragJ9H"></div>
-      <div id="p1card" class="playerCard" data-page-node-id="yV1W03QfDOqmQHHpyjWAzV"></div>
-      <h3 data-page-node-id="jCUDZtrKJ1mro698Ouuf4G">事件记录</h3>
-      <div id="log" data-page-node-id="iUBnvFWAzKjnEamyxNii5m"></div>
+      <div class="grp grp-players" id="players" data-page-node-id="JsXcFmuQspGPH6HsragJ9H"></div>
+      <div class="grp grp-status" id="statusBar" data-page-node-id="JmHshNLrogxnfy3ZSE0zeq"></div>
+      <div class="grp grp-tip"><div class="tip" id="boardTip" data-page-node-id="I1wpaOKdTa2aQk9YitXiQs"></div></div>
+      <div class="grp grp-log"><div id="log" data-page-node-id="iUBnvFWAzKjnEamyxNii5m"></div></div>
     </div>
   </div>
 </div>
@@ -520,12 +539,24 @@ let _mvCache={};
 function renderBoard(){
   boardEl.innerHTML="";
   _mvCache={};
+  const boundsCache={};
   for(let r=0;r<BS;r++)for(let c=0;c<BS;c++){
     const d=document.createElement("div");
     d.dataset.r=r; d.dataset.c=c;
     const cell=state.board[r][c];
     if(cell){
       d.className="cell placed"+cell.owner;
+      let b=boundsCache[cell.boxId];
+      if(!b){
+        const box=state.placed[cell.boxId];
+        let minR=BS,minC=BS,maxR=0,maxC=0;
+        for(const [rr,cc] of box.cells){ minR=Math.min(minR,rr); minC=Math.min(minC,cc); maxR=Math.max(maxR,rr); maxC=Math.max(maxC,cc); }
+        b=boundsCache[cell.boxId]={minR,minC,maxR,maxC};
+      }
+      if(r===b.minR) d.classList.add("edge-t");
+      if(r===b.maxR) d.classList.add("edge-b");
+      if(c===b.minC) d.classList.add("edge-l");
+      if(c===b.maxC) d.classList.add("edge-r");
       if(ui.move && ui.srcBox===null && cell.owner===1-state.current){
         if(!(cell.boxId in _mvCache)) _mvCache[cell.boxId] = safeMoveTargets(cell.boxId).length>0;
         d.classList.add(_mvCache[cell.boxId] ? "mvsrc" : "mvnomove");
@@ -595,6 +626,7 @@ function fitBoard(){
 }
 if(typeof window!=="undefined"){
   window.addEventListener("resize", fitBoard);
+  window.addEventListener("load", fitBoard);
   if(window.ResizeObserver && boardEl && boardEl.parentElement){ new ResizeObserver(fitBoard).observe(boardEl.parentElement); }
 }
 boardEl.addEventListener("mousemove", e=>{
@@ -654,26 +686,21 @@ function onCellClick(r,c){
   snapshot(); doPlace(p, r, c); resetUi(); advance();
 }
 function renderPlayers(){
+  const wrap=document.getElementById("players");
+  wrap.innerHTML="";
   [0,1].forEach(p=>{
-    const card=document.getElementById("p"+p+"card");
-    card.innerHTML="";
-    card.className="playerCard"+(state.current===p?" active":"");
     const ph=state.players[p];
     const own = p===state.current && !(mode==="ai"&&p===1);
     const chained = state.mustPlace && state.current===p;   // 已用移动，正在等待补落的那一手
-    card.innerHTML=`
-      <div class="pname"><span>${nameOf(p)}</span>
-        <span class="count">已放 ${ph.placedCount} · 移动 ${ph.moves}/${CONFIG.moveMax}</span></div>
-      <div class="pieceInfo">
-        <div class="sq">${Array.from({length:16},(_,i)=>`<i class="f${p}"></i>`).join("")}</div>
-        <div class="txt">清一色 4×4 方块，无限个<br/>每放 ${CONFIG.moveEvery} 个得 1 移动 token</div>
-      </div>
-      <div class="prow">
-        <span class="label">移动：</span>
-        <button class="chip ${ui.move&&state.current===p?'live':(ph.moves>0&&own&&!chained?'ready':'off')}" data-p="${p}">移动×${ph.moves}</button>
-      </div>
-      ${chained?`<div class="mustTip">已用过移动 —— 再落一个 4×4 才结束回合</div>`:``}`;
-    const btn=card.querySelector(".chip");
+    const el=document.createElement("div");
+    el.className="pcard f"+p+(state.current===p?" active":"");
+    el.innerHTML=`
+      <span class="dot"></span>
+      <span class="pn">${nameOf(p)}</span>
+      <span class="pc">落 ${ph.placedCount}</span>
+      <button class="chip ${ui.move&&state.current===p?'live':(ph.moves>0&&own&&!chained?'ready':'off')}">移 ${ph.moves}</button>
+      ${chained?`<span class="mustTip" style="margin:0">须再落一子</span>`:``}`;
+    const btn=el.querySelector(".chip");
     btn.addEventListener("click",()=>{
       if(!own) return;
       if(chained){ flash(btn,"本回合已用过移动"); return; }
@@ -684,13 +711,14 @@ function renderPlayers(){
       setTip("【移动】先点一个<b>对手</b>的方块（金色虚线框），再点一个<b>金色高亮</b>的空位把它搬过去。");
       render();
     });
+    wrap.appendChild(el);
   });
 }
 function flash(btn,msg){
   const old=btn.textContent; btn.textContent=msg; btn.style.background="var(--bad)";
   setTimeout(()=>{ btn.textContent=old; btn.style.background=""; },900);
 }
-const TIP_DEFAULT = "鼠标所在的格子就是 4×4 的<b>左上角</b>；带绿色描边与圆点的格子才放得下，幽灵只会出现在这些位置。每回合可以「移动＋落子」连招，也可以直接落子。";
+const TIP_DEFAULT = "鼠标格 = 4×4 左上角；绿框圆点格方可落子。";
 function resetUi(){
   ui={ move:false, srcBox:null, ghost:null, ghostMv:null, hoverSrc:null };
   setTip(state && state.mustPlace

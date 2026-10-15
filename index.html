@@ -93,7 +93,7 @@
   /* ——— 合并信息条：横屏放棋盘右侧成一列 / 竖屏放棋盘下方成一行 ——— */
   .infobar{
     display:flex; flex-direction:column; gap:8px;
-    flex:0 0 320px; max-width:42%;
+    flex:0 0 264px; max-width:34%;
     align-items:stretch;
     min-height:0;
     overflow-y:auto;      /* 信息比空间多时在内部滚动，绝不挤压棋盘 */
@@ -102,13 +102,13 @@
   }
   /* 提示最多两行，超出截断，高度可控 */
   .grp-tip .tip{display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;}
-  .grp{background:var(--panel); border-radius:10px; padding:8px 10px; display:flex; align-items:center; gap:8px; width:100%;}
+  .grp{background:var(--panel); border-radius:10px; padding:6px 9px; display:flex; align-items:center; gap:8px; width:100%;}
   .grp-ctrl{gap:6px;}
-  .grp-players{justify-content:space-around; gap:10px; padding:6px 10px;}
-  .grp-status{flex:1 1 auto; min-width:0; font-size:12px; color:var(--dim); line-height:1.45;}
+  .grp-players{justify-content:space-around; gap:6px; padding:6px 8px; flex-wrap:wrap;}
+  .grp-status{flex:0 0 auto; min-width:0; font-size:12px; color:var(--dim); line-height:1.45;}
   .grp-status b{color:var(--txt);}
   .grp-tip{align-items:flex-start;}
-  .grp-log{flex-direction:column; align-items:stretch; gap:4px; max-height:66px;}
+  .grp-log{flex-direction:column; align-items:stretch; gap:4px; max-height:56px;}
   .pcard{display:flex; align-items:center; gap:6px; padding:4px 8px; border-radius:8px; border:1px solid transparent; font-size:13px; white-space:nowrap;}
   .pcard.active{background:var(--panel2); border-color:var(--accent);}
   .pcard .dot{width:12px; height:12px; border-radius:3px; flex:0 0 auto;}

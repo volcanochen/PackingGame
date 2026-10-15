@@ -58,15 +58,19 @@
   }
   .cell.placed0{background:var(--p0);}
   .cell.placed1{background:var(--p1);}
-  /* 落下方块：内部保留 2px 间隙作为淡淡方格线；块边界用 2px 深色线填在间隙里，更显著 */
-  .cell{--edge:transparent;}
-  .cell.placed0{--edge:var(--p0d);}
-  .cell.placed1{--edge:var(--p1d);}
-  .cell.placed0, .cell.placed1{border-radius:0; position:relative;}
-  .cell.edge-t::before, .cell.edge-b::before{content:""; position:absolute; left:0; right:0; height:2px; background:var(--edge); pointer-events:none; z-index:2;}
+  /* 落下方块：块内用玩家色（深一档，亮底上才看得见）画 2px 方格线；方块之间用黑色 2px 线分隔，黑线在最上层更显著 */
+  .cell{--in:transparent; --blk:#000;}
+  .cell.placed0{--in:var(--p0d);}
+  .cell.placed1{--in:var(--p1d);}
+  .cell.placed0, .cell.placed1{
+    border-radius:0; position:relative;
+    box-shadow:0 -2px 0 var(--in), 0 2px 0 var(--in), -2px 0 0 var(--in), 2px 0 0 var(--in);
+  }
+  /* 块边界（edge-*）：黑色线盖在间隙里，位于内部彩线之上 */
+  .cell.edge-t::before, .cell.edge-b::before{content:""; position:absolute; left:0; right:0; height:2px; background:var(--blk); pointer-events:none; z-index:3;}
   .cell.edge-t::before{top:-2px;}
   .cell.edge-b::before{bottom:-2px;}
-  .cell.edge-l::after, .cell.edge-r::after{content:""; position:absolute; top:0; bottom:0; width:2px; background:var(--edge); pointer-events:none; z-index:2;}
+  .cell.edge-l::after, .cell.edge-r::after{content:""; position:absolute; top:0; bottom:0; width:2px; background:var(--blk); pointer-events:none; z-index:3;}
   .cell.edge-l::after{left:-2px;}
   .cell.edge-r::after{right:-2px;}
   .cell.mvsrc{border:2px solid var(--accent); cursor:pointer;}

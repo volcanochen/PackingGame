@@ -120,11 +120,17 @@ function send(ws, method, params){
 
   const shots = collectShotTriples();
   for(const s of shots){
-    await send(ws,'Emulation.setDeviceMetricsOverride',{width:s.w,height:s.h,deviceScaleFactor:1,mobile:false});
-    await sleep(450);
-    const r = await send(ws,'Page.captureScreenshot',{format:'png'});
+    // 即使尺寸没变也重新下发 override —— 强制合成器出一帧（否则 headless 截图可能拿到旧帧）
+    let w=s.w, h=s.h;
+    if(!w || !h){
+      const r = await send(ws,'Runtime.evaluate',{expression:'window.innerWidth+" "+window.innerHeight',returnByValue:true});
+      [w,h] = r.result.value.split(' ').map(Number);
+    }
+    await send(ws,'Emulation.setDeviceMetricsOverride',{width:w,height:h,deviceScaleFactor:1,mobile:false});
+    await sleep(400);
+    const r = await send(ws,'Page.captureScreenshot',{format:'png',captureBeyondViewport:true});
     fs.writeFileSync(s.shot, Buffer.from(r.data,'base64'));
-    console.log(`SHOT ${s.w}x${s.h} -> ${s.shot}`);
+    console.log(`SHOT ${w}x${h} -> ${s.shot}`);
   }
 
   if(exceptions.length){

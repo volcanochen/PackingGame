@@ -26,18 +26,20 @@
   }
   #app{
     height:100%; height:100dvh;
-    max-width:1100px; margin:0 auto; padding:10px;
+    /* 注：不要给 #app 设 max-width —— 人为压窄内容区会把宽屏变成近方形，
+       导致「棋盘最大化后没有剩余竖条」，信息只能折叠。现在宽度完全交给布局引擎。 */
+    margin:0 auto; padding:10px;
     display:flex; flex-direction:column; gap:8px;
   }
   header{display:flex; align-items:center; gap:10px; flex-wrap:wrap;}
   header h1{font-size:clamp(17px,4.6vw,22px); letter-spacing:1px;}
   .tag{font-size:11px; color:var(--dim); background:var(--panel); padding:3px 8px; border-radius:20px; white-space:nowrap;}
-  #statusBar{flex:1; text-align:right; font-size:clamp(12px,3.2vw,14px); color:var(--dim); min-width:120px;}
+  /* 注：#statusBar 旧规则（flex:1 + text-align:right）已删 —— 它会把状态区撑成 500px 高的空盒子 */
   .main{display:flex; gap:8px; flex:1 1 auto; min-height:0;}
 
   .boardWrap{
     background:var(--panel); border-radius:14px; padding:10px; position:relative;
-    flex:1 1 auto; min-width:0; min-height:0;
+    flex:1 1 auto; min-width:0; min-height:0; overflow:hidden;
     display:flex; align-items:center; justify-content:center;
   }
   .board{
@@ -90,22 +92,27 @@
   .cell.ghostmv.origin{box-shadow:inset 0 0 0 3px #ffe29a;}
   .cell.hoverSrc{outline:2px dashed var(--accent); outline-offset:-3px;}
 
-  /* ——— 合并信息条：横屏放棋盘右侧成一列 / 竖屏放棋盘下方成一行 ——— */
+  /* ——— 信息区：JS 先把棋盘放到最大正方形，再把「剩下的一条」空间分给它；
+         剩条放不下时整块折叠成悬浮按钮，点开是浮层（dock-overlay） ——— */
   .infobar{
-    display:flex; flex-direction:column; gap:8px;
-    flex:0 0 264px; max-width:34%;
-    align-items:stretch;
-    min-height:0;
+    display:flex; flex-direction:column; gap:8px; align-items:stretch;   /* 默认竖排：即使 JS 未跑，信息区也不会横着挤爆棋盘 */
+    flex:0 0 auto; min-width:0; min-height:0;
     overflow-y:auto;      /* 信息比空间多时在内部滚动，绝不挤压棋盘 */
     overflow-x:hidden;
     touch-action:pan-y;   /* 移动端允许在信息区里手指滑动 */
   }
+  .infobar.col{flex-direction:column;}
+  .infobar.row{flex-direction:row; flex-wrap:wrap; align-content:flex-start;}
+  .infobar.col .grp{width:100%;}
+  .infobar.row .grp{width:auto; flex:1 1 220px; min-width:0;}
+  .infobar.row .grp-status{white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .infobar.row .grp-tip .tip{-webkit-line-clamp:3;}
   /* 提示最多两行，超出截断，高度可控 */
   .grp-tip .tip{display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;}
-  .grp{background:var(--panel); border-radius:10px; padding:6px 9px; display:flex; align-items:center; gap:8px; width:100%;}
+  .grp{background:var(--panel); border-radius:10px; padding:6px 9px; display:flex; align-items:center; gap:8px;}
   .grp-ctrl{gap:6px;}
   .grp-players{justify-content:space-around; gap:6px; padding:6px 8px; flex-wrap:wrap;}
-  .grp-status{flex:0 0 auto; min-width:0; font-size:12px; color:var(--dim); line-height:1.45;}
+  .grp-status{flex:0 0 auto; min-width:0; font-size:12px; color:var(--dim); line-height:1.45; text-align:left;}
   .grp-status b{color:var(--txt);}
   .grp-tip{align-items:flex-start;}
   .grp-log{flex-direction:column; align-items:stretch; gap:4px; max-height:56px;}
@@ -126,24 +133,8 @@
   #log{max-height:48px; overflow-y:auto; font-size:11px; color:var(--dim); width:100%;}
   #log .t{color:var(--txt);} #log .p0c{color:var(--p0);} #log .p1c{color:var(--p1);}
 
-  @media (orientation:portrait){
-    .main{flex-direction:column;}
-    /* 信息区高度只随窗口变化（固定预留比例），内容变多时在内部滚动
-       —— 棋盘尺寸绝不被内容挤小，只随窗口大小/比例变化 */
-    .infobar{
-      flex-direction:row; flex-wrap:wrap;
-      flex:0 0 clamp(230px, 38%, 460px);
-      max-width:100%;
-      align-items:stretch;
-    }
-    .grp{width:auto; flex:1 1 200px;}
-    .grp-ctrl{flex:1 1 100%;}
-    .grp-players{flex:1 1 100%;}
-    .grp-status{flex:1 1 100%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
-    .grp-tip{flex:1 1 100%;}
-    .grp-tune{flex:1 1 100%;}
-    .grp-log{flex:1 1 100%; max-height:60px;}
-  }
+  /* 注：原先按 orientation:portrait 切方向的媒体查询已删除 —— 停靠方向现在由 JS
+     依据「棋盘最大化后剩余的那条空间」决定（Layout 模块），近方形窗口不会误判。 */
 
   /* ——— 可折叠调参面板 ——— */
   .grp-tune{align-items:flex-start;}
@@ -174,22 +165,44 @@
   .ovCard h2{font-size:24px; margin-bottom:8px;}
   .ovCard p{color:var(--dim); font-size:13px; margin-bottom:18px;}
   .ovCard .row{display:flex; gap:10px; justify-content:center;}
+
+  /* ——— 折叠态：信息区收进悬浮按钮 + 浮层（棋盘独占全部空间）——— */
+  #infoToggle{
+    position:fixed; right:16px; bottom:16px; z-index:45; display:none;
+    align-items:center; gap:6px; font-family:inherit; font-size:14px; color:#fff;
+    background:var(--p0d); border:none; border-radius:26px; padding:11px 18px; cursor:pointer;
+    box-shadow:0 8px 22px rgba(0,0,0,.5);
+  }
+  #app.dock-overlay #infoToggle{display:inline-flex;}
+  #infoOverlay{
+    position:fixed; inset:0; z-index:60; display:none;
+    align-items:center; justify-content:center; padding:16px;
+    background:rgba(10,14,24,.72); -webkit-backdrop-filter:blur(2px); backdrop-filter:blur(2px);
+  }
+  #infoOverlay.open{display:flex;}
+  #infoOverlay .ovPanel{
+    background:var(--bg); border:1px solid var(--line); border-radius:16px; padding:12px;
+    width:min(430px,100%); max-height:min(86dvh,86vh); display:flex; flex-direction:column; gap:10px; overflow:hidden;
+  }
+  #infoOverlay .ovHead{display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:13px; color:var(--dim);}
+  #infoOverlay .ovBody{flex:1 1 auto; min-height:0; display:flex; overflow:hidden;}
+  #infoOverlay .ovBody > .infobar{flex:1 1 auto; min-width:0;}
 </style>
 </head>
 <body data-page-node-id="sHGNEAYn4y05Lhs1KVt7rr">
-<div id="app" data-page-node-id="DSxAI3xKfaClRQ5yFgYdpG">
-  <header data-page-node-id="2FQCAgSFmACbQSyChHPbtE">
+<div id="app" class="dock-side" data-page-node-id="DSxAI3xKfaClRQ5yFgYdpG">
+  <header id="gameHeader" data-page-node-id="2FQCAgSFmACbQSyChHPbtE">
     <h1 data-page-node-id="VFM1doCkbzZPtqDydwivFO">📦 装箱对决 · 方块版</h1>
     <span class="tag" data-page-node-id="5EgoEZUfPDao1mgkUCaLgb">ruleset: packing-duel-r2.5</span>
     <span class="tag" id="cfgTag" data-page-node-id="hoW6SjsUCYC21AEOgdJB96">12×12 · 4×4 · 放不下判负 · 移动可续落</span>
   </header>
 
-  <div class="main" data-page-node-id="yq8wqKabcFpaVZvnqUZnkW">
-    <div class="boardWrap" data-page-node-id="qx6XJ4rtmLda46XSmuotqq">
+  <div class="main" id="mainArea" data-page-node-id="yq8wqKabcFpaVZvnqUZnkW">
+    <div class="boardWrap" id="boardWrap" data-page-node-id="qx6XJ4rtmLda46XSmuotqq">
       <div class="board" id="board" data-page-node-id="vakH5LMdJ7i73MmHuGTRbu"></div>
     </div>
 
-    <div class="infobar" data-page-node-id="Q6hSKLOSTNzF19jv2Jrxlm">
+    <div class="infobar" id="infobar" data-page-node-id="Q6hSKLOSTNzF19jv2Jrxlm">
       <div class="grp grp-ctrl" data-page-node-id="2LVRVqdDT3of3Bc0TXMEmH">
         <div class="modeSel" data-page-node-id="GYH998NMEVhVe1ZZrgW2Fp">
           <span id="mAI" class="on" data-page-node-id="muxTpP4skzxcVjErJ7Vqdb">对战 AI</span>
@@ -221,6 +234,16 @@
       </div>
       <div class="grp grp-log"><div id="log" data-page-node-id="iUBnvFWAzKjnEamyxNii5m"></div></div>
     </div>
+  </div>
+
+  <!-- 折叠态的悬浮按钮：必须放在 #app 内，#app.dock-overlay #infoToggle 才能命中 -->
+  <button id="infoToggle" type="button">☰<span id="infoToggleTxt">信息 / 调参</span></button>
+</div>
+
+<div id="infoOverlay">
+  <div class="ovPanel">
+    <div class="ovHead"><span>🧭 信息 · 操作 · 调参</span><button class="btn ghost sm" id="infoClose" type="button">✕ 收起</button></div>
+    <div class="ovBody" id="infoBody"></div>
   </div>
 </div>
 
@@ -691,7 +714,11 @@ function renderBoard(){
         if(!(cell.boxId in _mvCache)) _mvCache[cell.boxId] = safeMoveTargets(cell.boxId).length>0;
         d.classList.add(_mvCache[cell.boxId] ? "mvsrc" : "mvnomove");
       }
-      if(ui.move && ui.srcBox!==null && cell.boxId===ui.srcBox) d.classList.add("mvsrc");
+      if(ui.move && ui.srcBox!==null && cell.boxId===ui.srcBox){
+        d.classList.add("mvsrc");
+        // 关键：目标锚点可能就在方块自身内部（平移一格的场景），这些格子也要显示目标高亮
+        if(isMoveTargetCell(r,c)) d.classList.add("mvtgt");
+      }
     } else {
       d.className="cell empty";
       if(!ui.move && validAnchor(r,c)) d.classList.add("anchor");
@@ -754,10 +781,116 @@ function fitBoard(){
   boardEl.style.width = size+"px";
   boardEl.style.height = size+"px";
 }
+
+/* ============================================================
+   自适应布局（棋盘最大化优先）
+     原则：棋盘先取「容器短边」撑到的最大正方形 —— 只随窗口尺寸/比例变化，
+           绝不因下方/侧边文字变多而变小；内容变化时信息区内部滚动。
+     然后看棋盘之外剩下的「一条」空间：
+        · 右侧竖条够宽  → 停靠右侧（竖向一列）
+        · 下方横条够高  → 停靠底部（横向换行）
+        · 两条都不够（近方形窗口）→ 折叠成悬浮按钮，点开是浮层
+   ============================================================ */
+const Layout = (function(){
+  const GAP = 8;            // .main 的 gap
+  const PAD = 10;           // .boardWrap 的 padding
+  const MIN_SIDE = 216;     // 右侧竖条：至少要这么宽才塞得下信息
+  const MIN_BOTTOM = 120;   // 下方横条：至少要这么高才塞得下信息（能露出控制+状态两行，其余滚动）
+  const MAX_SIDE = 360;     // 竖条上限（超出部分留给棋盘两侧的呼吸空间）
+  const MAX_BOTTOM = 240;   // 横条上限
+  let lastKey = "", raf = 0, curDock = "side";
+
+  function q(id){ return document.getElementById(id); }
+  function openPanel(open){ const ov=q("infoOverlay"); if(ov) ov.classList.toggle("open", !!open); }
+  function isOpen(){ const ov=q("infoOverlay"); return !!ov && ov.classList.contains("open"); }
+
+  // 纯计算：给定 mainArea 的内容区尺寸 → 棋盘最大外径 + 信息区停靠方式与尺寸。
+  // 不变量：棋盘永远等于「短边 - 2*PAD」，信息区只分到剩下的那一条。
+  function plan(W, H){
+    const boardMax = Math.max(80, Math.min(W, H) - PAD*2);
+    const stripSide   = W - GAP - (boardMax + PAD*2);   // 剩下的竖条（放在右侧时）宽度
+    const stripBottom = H - GAP - (boardMax + PAD*2);   // 剩下的横条（放在下方时）高度
+    const dock = (stripSide >= MIN_SIDE) ? "side"
+               : (stripBottom >= MIN_BOTTOM) ? "bottom"
+               : "overlay";
+    const sideW   = dock==="side"   ? Math.min(Math.round(stripSide),   MAX_SIDE)   : 0;
+    const bottomH = dock==="bottom" ? Math.min(Math.round(stripBottom), MAX_BOTTOM) : 0;
+    return { board: boardMax, dock, sideW, bottomH, stripSide, stripBottom };
+  }
+
+  function compute(){
+    const app=q("app"), main=q("mainArea"), info=q("infobar"), wrap=q("boardWrap"), body=q("infoBody");
+    if(!app || !main || !info || !wrap || !boardEl) return;
+    const cs = (typeof getComputedStyle==="function") ? getComputedStyle(main) : null;
+    const W = main.clientWidth  - (cs ? parseFloat(cs.paddingLeft)+parseFloat(cs.paddingRight) : 0);
+    const H = main.clientHeight - (cs ? parseFloat(cs.paddingTop) +parseFloat(cs.paddingBottom): 0);
+    if(!(W>0) || !(H>0)) return;
+
+    // 1) 棋盘优先：取容器短边允许的最大正方形
+    const p = plan(W, H);
+    const key = Math.round(W)+"x"+Math.round(H)+"@"+p.dock;
+    if(key === lastKey) return;
+    lastKey = key;
+    curDock = p.dock;
+
+    // 2) 剩下的那一条交给信息区；两条都不够 → 折叠成浮层
+    app.classList.remove("dock-side","dock-bottom","dock-overlay");
+    app.classList.add("dock-"+p.dock);
+
+    if(p.dock === "overlay"){
+      // 信息整块搬进浮层；棋盘独占 mainArea
+      if(body && info.parentNode !== body) body.appendChild(info);
+      info.classList.remove("row"); info.classList.add("col");
+      info.style.width = ""; info.style.height = "";
+      main.style.flexDirection = "row";
+    }else if(p.dock === "side"){
+      if(info.parentNode !== main) main.appendChild(info);
+      if(isOpen()) openPanel(false);
+      info.classList.remove("row"); info.classList.add("col");
+      info.style.width  = p.sideW+"px";
+      info.style.height = "";
+      main.style.flexDirection = "row";
+    }else{
+      if(info.parentNode !== main) main.appendChild(info);
+      if(isOpen()) openPanel(false);
+      info.classList.remove("col"); info.classList.add("row");
+      info.style.height = p.bottomH+"px";
+      info.style.width  = "";
+      main.style.flexDirection = "column";
+    }
+    fitBoard();
+  }
+
+  function apply(){
+    if(typeof window === "undefined") return;
+    if(raf) return;
+    const sch = window.requestAnimationFrame || function(f){ return window.setTimeout(f,16); };
+    raf = sch(function(){ raf = 0; compute(); });
+  }
+
+  function init(){
+    // 启动时先同步算一次（避免首帧按默认 dock-side 闪一下），再挂监听
+    compute();
+    const btn = q("infoToggle"), ov = q("infoOverlay"), close = q("infoClose");
+    if(btn)   btn.addEventListener("click", ()=>openPanel(!isOpen()));
+    if(close) close.addEventListener("click", ()=>openPanel(false));
+    if(ov)    ov.addEventListener("click", e=>{ if(e.target === ov) openPanel(false); });
+    window.addEventListener("keydown", e=>{ if(e.key === "Escape") openPanel(false); });
+    window.addEventListener("resize", apply);
+    window.addEventListener("load", apply);
+    window.addEventListener("orientationchange", apply);
+    if(window.ResizeObserver && q("mainArea")){ new ResizeObserver(apply).observe(q("mainArea")); }
+    if(window.ResizeObserver && q("boardWrap")){ new ResizeObserver(apply).observe(q("boardWrap")); }
+    // 调参面板展开/收起不改变信息区尺寸（内部滚动），无需重算；但仍保险地重算一次
+    const tp = q("tunePanel");
+    if(tp) tp.addEventListener("toggle", ()=>setTimeout(apply, 30));
+    apply();
+  }
+
+  return { apply, plan, init, dock(){ return curDock; }, open: ()=>openPanel(true), close: ()=>openPanel(false) };
+})();
 if(typeof window!=="undefined"){
-  window.addEventListener("resize", fitBoard);
-  window.addEventListener("load", fitBoard);
-  if(window.ResizeObserver && boardEl && boardEl.parentElement){ new ResizeObserver(fitBoard).observe(boardEl.parentElement); }
+  Layout.init();
 }
 boardEl.addEventListener("mousemove", e=>{
   const d=e.target && e.target.closest ? e.target.closest(".cell") : null;
@@ -790,21 +923,51 @@ function onCellClick(r,c){
           tipErr("这枚方块搬走后你没地方落子（会判负），不能选它；换一枚<b>金色虚线</b>的可搬方块"); return;
         }
         ui.srcBox=cell.boxId;
-        setTip("已选中对手的方块：再点一个<b>金色高亮</b>的位置把它搬过去（该格 = 新左上角）。");
+        setTip("已选中对手的方块：再点一个<b>金色高亮</b>的位置把它搬过去（该格 = 新左上角，<b>可以落在方块自身内部</b>）。");
         render(); return;
       }
       tipErr("请先点<b>对手</b>的方块（金色虚线框的那个）"); return;
     } else {
+      const cell=state.board[r][c];
+      // —— 点在当前选中的源方块内部：确认或解释，绝不悄悄取消选择 ——
+      //    （锚点允许落在方块自身上：平移一格时新左上角就在原方块内部）
+      if(cell && cell.boxId===ui.srcBox){
+        if(safeMoveTargets(ui.srcBox).some(([rr,cc])=> rr===r && cc===c)){
+          snapshot();                                  // 悔棋点：可退回移动之前
+          const res = doMove(p, ui.srcBox, r, c);
+          resetUi();
+          if(res==="lost") return;                     // 移动后仍无落位：直接判负
+          state.mustPlace=true;                        // 本回合还能再落一个方块
+          setTip(mustPlaceTip());
+          render(); return;
+        }
+        const cur=state.placed[ui.srcBox].cells[0];
+        if(r===cur[0] && c===cur[1]){
+          tipErr("这就是它现在的位置 —— 请点<b>金色高亮</b>的格子（包括方块内部的高亮格）作为新左上角");
+        }else{
+          tipErr("这个格不能当锚点：只有<b>金色高亮</b>的格子才行（方块内部的高亮格也可以）");
+        }
+        render(); return;                              // 保持选中，让用户继续点
+      }
+      // —— 点在另一枚对手方块上：直接改选，省一次点击 ——
+      if(cell && cell.owner===1-p){
+        if(safeMoveTargets(cell.boxId).length===0){
+          tipErr("这枚方块搬走后你没地方落子（会判负），不能选它"); render(); return;
+        }
+        ui.srcBox=cell.boxId;
+        setTip("已改选这枚方块：再点一个<b>金色高亮</b>的位置搬过去（锚点可以在方块自身内部）。");
+        render(); return;
+      }
       if(safeMoveTargets(ui.srcBox).some(([rr,cc])=> rr===r && cc===c)){
-        snapshot();                                  // 悔棋点：可退回移动之前
+        snapshot();                                    // 悔棋点：可退回移动之前
         const res = doMove(p, ui.srcBox, r, c);
         resetUi();
-        if(res==="lost") return;                     // 移动后仍无落位：直接判负
-        state.mustPlace=true;                        // 本回合还能再落一个方块
+        if(res==="lost") return;                       // 移动后仍无落位：直接判负
+        state.mustPlace=true;                          // 本回合还能再落一个方块
         setTip(mustPlaceTip());
         render(); return;
       }
-      tipErr("那里搬不过去：只能搬到<b>金色高亮</b>的空位");
+      tipErr("那里搬不过去：只能搬到<b>金色高亮</b>的位置（点其他对手方块可改选；点空白处取消移动）");
       ui.srcBox=null; render(); return;
     }
   }
@@ -838,7 +1001,7 @@ function renderPlayers(){
       if(oppBoxes(p).length===0){ flash(btn,"对手还没有方块"); return; }
       if(!canMoveNow(p)){ flash(btn,"没有可搬动的位置"); return; }
       ui.move=true; ui.srcBox=null;
-      setTip("【移动】先点一个<b>对手</b>的方块（金色虚线框），再点一个<b>金色高亮</b>的空位把它搬过去。");
+      setTip("【移动】先点一个<b>对手</b>的方块（金色虚线框），再点一个<b>金色高亮</b>的位置搬过去 —— 锚点也可以在方块自身内部（平移）。");
       render();
     });
     wrap.appendChild(el);
@@ -876,6 +1039,13 @@ function renderStatus(){
   sb.innerHTML = state.over
     ? `<b>${nameOf(state.winner)} 获胜（第 ${state.round} 回合）</b>`
     : `第 ${state.round} 回合 · 轮到 <b>${nameOf(state.current)}</b>${phase} · 可落锚点 <b style="color:${anchors? 'var(--ok)':'var(--bad)'}">${anchors}</b>`;
+  // 折叠态（信息区收进浮层）时，最关键的「轮到谁 / 还能不能落」压到悬浮按钮上，保证一眼可见
+  const tg = document.getElementById("infoToggleTxt");
+  if(tg){
+    tg.textContent = state.over
+      ? `${nameOf(state.winner)} 获胜`
+      : `轮到${nameOf(state.current)} · 锚点 ${anchors}${state.mustPlace?" · 须再落":""}`;
+  }
 }
 function showWin(){
   const p=state.winner;

@@ -6,7 +6,9 @@
 
 一个关于「空间账」的双人对抗游戏 · 单文件 HTML，打开即玩
 
-[![ruleset](https://img.shields.io/badge/ruleset-r2.3-4facfe?style=flat-square)](docs/design-r2.md)
+**[▶ 立即游玩（GitHub Pages）](https://volcanochen.github.io/PackingGame)**
+
+[![ruleset](https://img.shields.io/badge/ruleset-r2.5-4facfe?style=flat-square)](docs/design-r2.md)
 [![board](https://img.shields.io/badge/board-12x12-ff6b6b?style=flat-square)](index.html)
 [![piece](https://img.shields.io/badge/piece-4x4-ffd166?style=flat-square)](index.html)
 [![dependencies](https://img.shields.io/badge/dependencies-0-35d07f?style=flat-square)](index.html)
@@ -102,13 +104,14 @@
 
 ## 跑起来
 
+- **在线直接玩（推荐）**：[volcanochen.github.io/PackingGame](https://volcanochen.github.io/PackingGame)
+- 或本地打开：双击 `index.html` 即可；也可起本地服务：
+
 ```bash
-# 双击 index.html 就能玩
-# 或者起个本地服务
 python -m http.server 8000   # → http://localhost:8000
 ```
 
-桌面鼠标 / 移动端触控都支持，不需要联网，没有构建步骤。
+桌面鼠标 / 移动端触控都支持，不需要联网，没有构建步骤。界面已适配手机浏览器（自适应窗口、放大字体、操作台常驻）。
 
 ## 操作
 
@@ -116,7 +119,7 @@ python -m http.server 8000   # → http://localhost:8000
 - 幽灵预览与真实落点**严格一致**：放不下的位置**不会**预览，看到就是能点。
 - 点右侧 `移动 ×N` 进入移动模式 → 先点对手方块（金色虚线框），再点金色高亮的目标位 → **搬完还得再落一个 4×4** 才轮到对手。
 - 搬完之后你自己也堵死的那些目标是**不会**显示出来的，用不着担心点错。
-- 没处可搬的对手方块会**置灰**；点非法位置会告诉你具体原因。
+- 没处可搬的对手方块会标**淡金虚线**（仍可点，点后会提示具体原因）；点非法位置会告诉你具体原因。
 - <kbd>Esc</kbd> 取消当前移动操作。
 - 顶部切「对战 AI / 双人热座」，支持**悔棋**（AI 模式下会一路退回你自己的回合）。
 
@@ -180,7 +183,8 @@ node tests/smoke.js    # 30 项断言 + 30 局整局模拟，无需浏览器
 
 | 版本 | 关键变化 |
 |---|---|
-| **r2.4**（当前） | AI 战术层：抓致胜手、防被将死；对随机对手胜率 50% → 67%；测试脚本入库（node tests/smoke.js，30 项断言 + 30 局模拟） |
+| **r2.5**（当前） | 体验修复：悔棋彻底回退整手并正确交还下棋人（热座退红退蓝都不串手）；移动模式不再把无安全落点的对手方块置灰，改为淡虚线仍可点选并提示原因；AI 移动 token 改为「只在无处可落时被迫使用」，修掉开局白白搬玩家方块的浪费；双人热座改用 蓝方/红方 命名；界面自适应窗口、放大字体、禁单指拖动页面、操作台常驻不遮挡棋盘 |
+| r2.4 | AI 战术层：抓致胜手、防被将死；对随机对手胜率 50% → 67%；测试脚本入库（node tests/smoke.js，30 项断言 + 30 局模拟） |
 | r2.3 | 「移动＋落子」同回合连招；自杀式搬运从可选目标里剔除；AI 比较两种打法并引入 token 机会成本 |
 | r2.2 | 幽灵预览所见即所得（锚点 = 鼠标格，放不下不预览）；合法锚点圆点标记；悔棋修好 |
 | r2.1 | 移动后仍无落位即判负；AI 不再自杀式移动 |

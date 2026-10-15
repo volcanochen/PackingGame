@@ -3,7 +3,7 @@
 <head data-page-node-id="9izkhDMbYB1MUYB8mOiOAf">
 <meta charset="UTF-8" data-page-node-id="dAmRE838Ss55JBD4tbn7i9">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" data-page-node-id="GqlfPskQVkHOHCrjOepX3p">
-<title>装箱对决 · 方块版 (r2.3)</title>
+<title>装箱对决 · 方块版 (r2.5)</title>
 <style>
   :root{
     --bg:#0f1420; --panel:#1a2233; --panel2:#222c42;
@@ -12,19 +12,39 @@
     --ok:#35d07f; --bad:#ff5c5c; --accent:#ffd166;
   }
   *{box-sizing:border-box; margin:0; padding:0;}
-  body{background:var(--bg); color:var(--txt); font-family:"Segoe UI","Microsoft YaHei",system-ui,sans-serif; min-height:100vh;}
-  #app{max-width:1000px; margin:0 auto; padding:14px;}
-  header{display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:10px;}
-  header h1{font-size:20px; letter-spacing:1px;}
-  .tag{font-size:11px; color:var(--dim); background:var(--panel); padding:3px 8px; border-radius:20px;}
-  #statusBar{flex:1; text-align:right; font-size:13px; color:var(--dim);}
-  .layout{display:grid; grid-template-columns:1fr 300px; gap:14px;}
-  @media (max-width:880px){ .layout{grid-template-columns:1fr;} }
+  html,body{height:100%;}
+  body{
+    background:var(--bg); color:var(--txt);
+    font-family:"Segoe UI","Microsoft YaHei",system-ui,sans-serif;
+    font-size:15px; line-height:1.45;
+    overflow:hidden;                 /* 页面不滚动 */
+    overscroll-behavior:none;         /* 禁下拉刷新 / 橡皮筋 */
+    position:fixed; inset:0;          /* 禁单指拖动整页 */
+    touch-action:none;                /* 禁手势缩放 / 滚动 */
+    -webkit-text-size-adjust:100%;
+  }
+  #app{
+    height:100%; height:100dvh;
+    max-width:1100px; margin:0 auto; padding:10px;
+    display:flex; flex-direction:column; gap:8px;
+  }
+  header{display:flex; align-items:center; gap:10px; flex-wrap:wrap;}
+  header h1{font-size:clamp(17px,4.6vw,22px); letter-spacing:1px;}
+  .tag{font-size:11px; color:var(--dim); background:var(--panel); padding:3px 8px; border-radius:20px; white-space:nowrap;}
+  #statusBar{flex:1; text-align:right; font-size:clamp(12px,3.2vw,14px); color:var(--dim); min-width:120px;}
+  .layout{display:flex; gap:10px; flex:1 1 auto; min-height:0;}
+  @media (max-width:760px){ .layout{flex-direction:column;} }
 
-  .boardWrap{background:var(--panel); border-radius:14px; padding:14px; position:relative;}
+  .boardWrap{
+    background:var(--panel); border-radius:14px; padding:10px; position:relative;
+    flex:1 1 auto; min-width:0; min-height:0;
+    display:flex; align-items:center; justify-content:center;
+  }
   .board{
     display:grid; grid-template-columns:repeat(12,1fr); grid-template-rows:repeat(12,1fr);
-    aspect-ratio:1/1; gap:2px; background:var(--panel2); border:1px solid var(--line); border-radius:8px; padding:2px;
+    aspect-ratio:1/1; width:min(100%, 80vh); max-width:100%; max-height:100%;
+    gap:2px; background:var(--panel2); border:1px solid var(--line); border-radius:8px; padding:2px;
+    touch-action:none;                 /* 棋盘上禁手势，避免拖动页面 */
   }
   .cell{position:relative; border-radius:2px; background:#1c2638; transition:background .06s;}
   .cell.empty{background:#26314b;}
@@ -40,7 +60,7 @@
   .cell.placed1{background:var(--p1); box-shadow:inset 0 0 0 1px var(--p1d);}
   .cell.mvsrc{border:2px solid var(--accent); cursor:pointer;}
   .cell.mvsrc:hover{background:#7a6426;}
-  .cell.mvdead{opacity:.4; cursor:not-allowed;}
+  .cell.mvnomove{outline:2px dashed rgba(255,209,102,.4); outline-offset:-3px;}  /* 对手方块但无安全落点：仍可点，点了解释原因 */
   .cell.mvtgt{border:2px solid var(--accent); cursor:pointer; background:#5a4a1f;}
   .cell.mvtgt:hover{background:#7a6426;}
   /* 落子幽灵：与点击落点严格一致（鼠标所在格 = 方块左上角） */
@@ -55,35 +75,36 @@
   .cell.ghostmv.origin{box-shadow:inset 0 0 0 3px #ffe29a;}
   .cell.hoverSrc{outline:2px dashed var(--accent); outline-offset:-3px;}
 
-  .panel{background:var(--panel); border-radius:14px; padding:14px;}
-  .panel h3{font-size:13px; color:var(--dim); margin-bottom:8px; letter-spacing:1px; border-bottom:1px solid var(--line); padding-bottom:6px;}
-  .playerCard{border:1px solid var(--line); border-radius:10px; padding:10px; margin-bottom:12px; background:var(--panel2);}
+  .panel{background:var(--panel); border-radius:14px; padding:12px; flex:0 0 320px; max-width:42%; overflow:auto; touch-action:pan-y;}
+  @media (max-width:760px){ .panel{flex:0 0 auto; max-width:100%; max-height:38%;} }
+  .panel h3{font-size:14px; color:var(--dim); margin-bottom:8px; letter-spacing:1px; border-bottom:1px solid var(--line); padding-bottom:6px;}
+  .playerCard{border:1px solid var(--line); border-radius:10px; padding:10px; margin-bottom:10px; background:var(--panel2);}
   .playerCard.active{box-shadow:0 0 0 2px var(--accent);}
-  .pname{font-weight:700; font-size:14px; display:flex; justify-content:space-between; align-items:center;}
-  .pname .count{font-size:11px; color:var(--dim);}
+  .pname{font-weight:700; font-size:15px; display:flex; justify-content:space-between; align-items:center;}
+  .pname .count{font-size:12px; color:var(--dim);}
   .pieceInfo{display:flex; align-items:center; gap:8px; margin-top:10px;}
   .sq{display:grid; grid-template-columns:repeat(4,12px); grid-template-rows:repeat(4,12px); gap:1px;}
   .sq i{width:12px; height:12px; border-radius:2px; background:#33405e;}
   .sq i.f0{background:var(--p0);} .sq i.f1{background:var(--p1);}
-  .pieceInfo .txt{font-size:12px; color:var(--dim); line-height:1.5;}
+  .pieceInfo .txt{font-size:13px; color:var(--dim); line-height:1.5;}
   .prow{display:flex; align-items:center; justify-content:space-between; margin-top:10px; gap:8px;}
-  .prow .label{font-size:12px; color:var(--dim);}
-  .chip{font-size:12px; padding:4px 10px; border-radius:6px; border:1px solid var(--line); cursor:pointer; background:var(--panel2);}
+  .prow .label{font-size:13px; color:var(--dim);}
+  .chip{font-size:13px; padding:5px 12px; border-radius:6px; border:1px solid var(--line); cursor:pointer; background:var(--panel2);}
   .chip.ready{background:var(--p0d); color:#fff; border-color:var(--p0d);}
   .chip.live{background:var(--accent); color:#222; border-color:var(--accent);}
   .chip.off{opacity:.35; cursor:not-allowed;}
-  .mustTip{margin-top:8px; font-size:11px; line-height:1.5; color:var(--accent);
+  .mustTip{margin-top:8px; font-size:12px; line-height:1.5; color:var(--accent);
     background:rgba(255,209,102,.12); border:1px solid rgba(255,209,102,.45); border-radius:6px; padding:5px 8px;}
-  .tip{font-size:11px; color:var(--dim); margin-top:8px; line-height:1.6;}
+  .tip{font-size:12px; color:var(--dim); margin-top:8px; line-height:1.6;}
 
-  #log{max-height:130px; overflow-y:auto; font-size:11px; color:var(--dim); margin-top:6px;}
+  #log{max-height:130px; overflow-y:auto; font-size:12px; color:var(--dim); margin-top:6px;}
   #log .t{color:var(--txt);} #log .p0c{color:var(--p0);} #log .p1c{color:var(--p1);}
 
-  button.btn{background:var(--p0d); color:#fff; border:none; border-radius:8px; padding:8px 14px; font-size:13px; cursor:pointer;}
+  button.btn{background:var(--p0d); color:#fff; border:none; border-radius:8px; padding:9px 14px; font-size:14px; cursor:pointer;}
   button.btn.ghost{background:transparent; border:1px solid var(--line); color:var(--txt);}
-  .topRow{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px;}
+  .topRow{display:flex; gap:8px; flex-wrap:wrap;}
   .modeSel{display:flex; gap:6px;}
-  .modeSel span{font-size:12px; color:var(--dim); cursor:pointer; padding:4px 10px; border:1px solid var(--line); border-radius:20px;}
+  .modeSel span{font-size:13px; color:var(--dim); cursor:pointer; padding:5px 10px; border:1px solid var(--line); border-radius:20px;}
   .modeSel span.on{background:var(--accent); color:#222; border-color:var(--accent);}
 
   .overlay{position:fixed; inset:0; background:rgba(10,14,24,.82); display:flex; align-items:center; justify-content:center; z-index:50;}
@@ -98,7 +119,7 @@
 <div id="app" data-page-node-id="DSxAI3xKfaClRQ5yFgYdpG">
   <header data-page-node-id="2FQCAgSFmACbQSyChHPbtE">
     <h1 data-page-node-id="VFM1doCkbzZPtqDydwivFO">📦 装箱对决 · 方块版</h1>
-    <span class="tag" data-page-node-id="5EgoEZUfPDao1mgkUCaLgb">ruleset: packing-duel-r2.3</span>
+    <span class="tag" data-page-node-id="5EgoEZUfPDao1mgkUCaLgb">ruleset: packing-duel-r2.5</span>
     <span class="tag" data-page-node-id="hoW6SjsUCYC21AEOgdJB96">12×12 · 4×4 · 放不下判负 · 移动可续落</span>
     <div id="statusBar" data-page-node-id="JmHshNLrogxnfy3ZSE0zeq"></div>
   </header>
@@ -143,14 +164,16 @@
    CONFIG — 唯一规则源（ruleset packing-duel-r2）
    ============================================================ */
 const CONFIG = {
-  ruleset_id: "packing-duel-r2.3",
+  ruleset_id: "packing-duel-r2.5",
   boardSize: 12,
   piece: 4,           // 清一色 4×4 大方块，无限个
   moveEvery: 2,       // 每放 N 次得 1 个「移动」token
   moveMax: 3,         // token 上限
   secondStartMove: 1  // 后手开局补 1 个移动 token（平衡）
 };
-const PLAYER_NAMES = ["你", "对手"];
+const PLAYER_NAMES_HOT = ["蓝方", "红方"];   // 双人对阵：红蓝玩家
+const PLAYER_NAMES_AI  = ["你",  "对手"];   // 对战 AI：你 / 对手
+function nameOf(p){ return (mode==="ai" ? PLAYER_NAMES_AI : PLAYER_NAMES_HOT)[p]; }
 const BS = CONFIG.boardSize, P = CONFIG.piece, MAXA = BS - P + 1; // 锚点 0..8
 
 /* ============================================================
@@ -168,6 +191,7 @@ function newState(){
     seq:0,
     current:0,
     round:1,
+    turnId:0,
     players: [
       { placedCount:0, moves:0 },
       { placedCount:0, moves:0 }
@@ -181,6 +205,7 @@ function cloneState(s){
     board: s.board.map(r=>r.map(c=> c?{...c}:null)),
     placed: Object.fromEntries(Object.entries(s.placed).map(([k,v])=>[k,{...v, cells:v.cells.map(p=>[...p])}])),
     seq:s.seq, current:s.current, round:s.round, over:s.over, winner:s.winner,
+    turnId:s.turnId,
     mustPlace:!!s.mustPlace,
     players: s.players.map(p=>({placedCount:p.placedCount, moves:p.moves}))
   };
@@ -258,9 +283,9 @@ function doPlace(p, r, c){
   state.players[p].placedCount++;
   if(state.players[p].placedCount % CONFIG.moveEvery === 0 && state.players[p].moves < CONFIG.moveMax){
     state.players[p].moves++;
-    log(`<span class="p${p}c">${PLAYER_NAMES[p]}</span> 放下一个 4×4 于 (${r+1},${c+1})，获得 1 个移动 token`);
+    log(`<span class="p${p}c">${nameOf(p)}</span> 放下一个 4×4 于 (${r+1},${c+1})，获得 1 个移动 token`);
   } else {
-    log(`<span class="p${p}c">${PLAYER_NAMES[p]}</span> 放下一个 4×4 于 (${r+1},${c+1})`);
+    log(`<span class="p${p}c">${nameOf(p)}</span> 放下一个 4×4 于 (${r+1},${c+1})`);
   }
 }
 function doMove(player, boxId, r, c){
@@ -270,7 +295,7 @@ function doMove(player, boxId, r, c){
   b.cells = cells;
   cells.forEach(([rr,cc])=> state.board[rr][cc]={ boxId, owner:b.owner });
   state.players[player].moves--;
-  log(`<span class="p${player}c">${PLAYER_NAMES[player]}</span> 把对手的 4×4 搬到 (${r+1},${c+1})`);
+  log(`<span class="p${player}c">${nameOf(player)}</span> 把对手的 4×4 搬到 (${r+1},${c+1})`);
   // 核心判定：移动后若仍无落位，该玩家直接判负
   if(!canPlaceAny()){
     state.over = true;
@@ -301,6 +326,7 @@ function advance(){
   if(state.over) return;
   state.current = 1 - state.current;
   state.round++;
+  state.turnId++;               // 新回合：turnId 自增，用于悔棋定位
   state.mustPlace = false;      // 不变量：新回合一定从「落牌之前」开始
   resetUi();
   if(!canAct(state.current)){
@@ -318,14 +344,14 @@ function advance(){
     setTimeout(aiTurn, 520);
   }
 }
+// 悔棋快照：在「动作发生之前」记录当前局面，并打上 turnId。
+// 同一回合内的多次动作（如「移动＋落子」连招）共享同一个 turnId，
+// 这样一次 undo 就能把整手（含连招）完整退回，并交还给该手的主人。
 function snapshot(){
-  history.push(cloneState(state));
-  if(history.length>60) history.shift();
+  history.push({ turnId: state.turnId, s: cloneState(state) });
+  if(history.length>80) history.shift();
 }
-function commitAction(){
-  snapshot();
-  advance();
-}
+function commitAction(){ advance(); }   // 仅推进回合；快照须由调用方在动作前调用
 
 /* ---- AI（r2.4）----
    三层结构：
@@ -436,7 +462,10 @@ function aiCandidates(){
     const s1=placeOn(cloneState(state),r,c);
     list.push({type:'place', r, c, sAfter:s1, score:scoreState(s1)});
   }
-  if(canMoveNow(1)){
+  // 连招（移动＋落子）只在「自己已无处可落、被迫移动」时才考虑。
+  // 能直接落子时，落子保留 token 永远更优——移动 token 是后手/劣势方的翻盘杠杆，
+  // 不该在开局白白挪动对手刚放的方块。
+  if(canMoveNow(1) && !canPlaceAny()){
     const rough=[];
     for(const b of oppBoxes(1)) for(const [mr,mc] of safeMoveTargets(b.boxId)){
       const s1=simMove(b.boxId,mr,mc);
@@ -472,6 +501,7 @@ function aiTurn(){
       // 若期间被悔棋/重开，状态已变，放弃这手
       if(state.over || state.current!==1 || !state.mustPlace) return;
       if(!canPlaceOn(state, best.pr, best.pc)) return;
+      snapshot();                                  // 连招第二手：与移动共享同一 turnId，整手可一次退回
       doPlace(1, best.pr, best.pc);
       state.mustPlace=false; resetUi(); advance();
     }, 520);
@@ -484,7 +514,7 @@ function aiTurn(){
    渲染
    ============================================================ */
 const boardEl=document.getElementById("board");
-function render(){ renderBoard(); renderPlayers(); renderStatus(); paintGhost(); }
+function render(){ renderBoard(); renderPlayers(); renderStatus(); paintGhost(); fitBoard(); }
 let _mvCache={};
 function renderBoard(){
   boardEl.innerHTML="";
@@ -497,7 +527,7 @@ function renderBoard(){
       d.className="cell placed"+cell.owner;
       if(ui.move && ui.srcBox===null && cell.owner===1-state.current){
         if(!(cell.boxId in _mvCache)) _mvCache[cell.boxId] = safeMoveTargets(cell.boxId).length>0;
-        d.classList.add(_mvCache[cell.boxId] ? "mvsrc" : "mvdead");
+        d.classList.add(_mvCache[cell.boxId] ? "mvsrc" : "mvnomove");
       }
       if(ui.move && ui.srcBox!==null && cell.boxId===ui.srcBox) d.classList.add("mvsrc");
     } else {
@@ -549,6 +579,23 @@ function paintGhost(){
     d.classList.toggle("hoverSrc", !!ui.hoverSrc && !!state.board[rr][cc] && state.board[rr][cc].boxId===ui.hoverSrc);
   }
 }
+// 让棋盘始终是「容器宽 / 容器高」中较小值的正方形 —— 适配任意窗口，不溢出、不滚动
+function fitBoard(){
+  const wrap = boardEl && boardEl.parentElement;
+  if(!wrap) return;
+  const cs = (typeof getComputedStyle==="function") ? getComputedStyle(wrap) : null;
+  const padX = cs ? (parseFloat(cs.paddingLeft)+parseFloat(cs.paddingRight)) : 20;
+  const padY = cs ? (parseFloat(cs.paddingTop)+parseFloat(cs.paddingBottom)) : 20;
+  const availW = (wrap.clientWidth||wrap.offsetWidth||0) - padX;
+  const availH = (wrap.clientHeight||wrap.offsetHeight||0) - padY;
+  const size = Math.max(80, Math.floor(Math.min(availW, availH)));
+  boardEl.style.width = size+"px";
+  boardEl.style.height = size+"px";
+}
+if(typeof window!=="undefined"){
+  window.addEventListener("resize", fitBoard);
+  if(window.ResizeObserver && boardEl && boardEl.parentElement){ new ResizeObserver(fitBoard).observe(boardEl.parentElement); }
+}
 boardEl.addEventListener("mousemove", e=>{
   const d=e.target && e.target.closest ? e.target.closest(".cell") : null;
   if(d) updateGhost(+d.dataset.r, +d.dataset.c);
@@ -570,14 +617,14 @@ function onCellClick(r,c){
     if(ui.move){ ui.move=false; ui.srcBox=null; }
     if(state.board[r][c]){ tipErr("这里已经有方块了"); return; }
     if(!validAnchor(r,c)){ tipErr("这里放不下 4×4：请选择<b>带绿色圆点</b>的格子"); return; }
-    doPlace(p, r, c); state.mustPlace=false; resetUi(); commitAction(); return;
+    snapshot(); doPlace(p, r, c); state.mustPlace=false; resetUi(); advance(); return;
   }
   if(ui.move){
     if(ui.srcBox===null){
       const cell=state.board[r][c];
       if(cell && cell.owner===1-p){
         if(safeMoveTargets(cell.boxId).length===0){
-          tipErr("这个方块搬去哪你都没法落子了，换一个吧"); return;
+          tipErr("这枚方块搬走后你没地方落子（会判负），不能选它；换一枚<b>金色虚线</b>的可搬方块"); return;
         }
         ui.srcBox=cell.boxId;
         setTip("已选中对手的方块：再点一个<b>金色高亮</b>的位置把它搬过去（该格 = 新左上角）。");
@@ -603,7 +650,7 @@ function onCellClick(r,c){
     tipErr(`这里放不下 4×4：以 (${r+1},${c+1}) 为左上角会越界或被占。请选择<b>带绿色圆点</b>的格子`);
     return;
   }
-  doPlace(p, r, c); resetUi(); commitAction();
+  snapshot(); doPlace(p, r, c); resetUi(); advance();
 }
 function renderPlayers(){
   [0,1].forEach(p=>{
@@ -614,7 +661,7 @@ function renderPlayers(){
     const own = p===state.current && !(mode==="ai"&&p===1);
     const chained = state.mustPlace && state.current===p;   // 已用移动，正在等待补落的那一手
     card.innerHTML=`
-      <div class="pname"><span>${PLAYER_NAMES[p]}</span>
+      <div class="pname"><span>${nameOf(p)}</span>
         <span class="count">已放 ${ph.placedCount} · 移动 ${ph.moves}/${CONFIG.moveMax}</span></div>
       <div class="pieceInfo">
         <div class="sq">${Array.from({length:16},(_,i)=>`<i class="f${p}"></i>`).join("")}</div>
@@ -667,16 +714,16 @@ function renderStatus(){
     ? ` · <b style="color:var(--accent)">移动后 · 须再落一子</b>`
     : "";
   sb.innerHTML = state.over
-    ? `<b>${PLAYER_NAMES[state.winner]} 获胜（第 ${state.round} 回合）</b>`
-    : `第 ${state.round} 回合 · 轮到 <b>${PLAYER_NAMES[state.current]}</b>${phase} · 可落锚点 <b style="color:${anchors? 'var(--ok)':'var(--bad)'}">${anchors}</b>`;
+    ? `<b>${nameOf(state.winner)} 获胜（第 ${state.round} 回合）</b>`
+    : `第 ${state.round} 回合 · 轮到 <b>${nameOf(state.current)}</b>${phase} · 可落锚点 <b style="color:${anchors? 'var(--ok)':'var(--bad)'}">${anchors}</b>`;
 }
 function showWin(){
   const p=state.winner;
   document.getElementById("winOverlay").classList.remove("hidden");
   document.getElementById("winTitle").textContent =
-    mode==="hot" ? `🎉 ${PLAYER_NAMES[p]} 获胜` : (p===0?"🎉 你赢了":"🤝 对手获胜");
+    mode==="hot" ? `🎉 ${nameOf(p)} 获胜` : (p===0?"🎉 你赢了":"🤝 对手获胜");
   document.getElementById("winDesc").textContent =
-    `第 ${state.round} 回合，${PLAYER_NAMES[1-p]} 已放不下任何 4×4，${PLAYER_NAMES[p]} 获胜。`;
+    `第 ${state.round} 回合，${nameOf(1-p)} 已放不下任何 4×4，${nameOf(p)} 获胜。`;
 }
 
 /* ============================================================
@@ -696,15 +743,28 @@ document.getElementById("btnRestart").addEventListener("click", startGame);
 document.getElementById("btnUndo").addEventListener("click", undo);
 function undo(){
   if(history.length===0) return;
-  let s=history.pop();
-  // AI 模式：一路回退到「人类」的回合，否则会立刻又触发 AI 落子，等于没悔成
-  while(mode==="ai" && s.current===1 && history.length>0) s=history.pop();
-  state=s;
-  state.over=false;                 // 若上一手已判负，悔棋可救回
+  let targetTurn;
+  if(mode==="ai"){
+    // 对战 AI：一路退回「人类（玩家0）最近一次行动之前」，把 AI 的回应一并退回
+    let t=-1;
+    for(const h of history) if(h.s.current===0) t=h.turnId;
+    targetTurn=t;
+  } else {
+    // 双人对阵：退回最近完成的一手（不论红蓝），整手（含连招）一次退清
+    targetTurn = history[history.length-1].turnId;
+  }
+  if(targetTurn<0) return;
+  let idx=0;
+  while(idx<history.length && history[idx].turnId!==targetTurn) idx++;
+  if(idx>=history.length) return;
+  const snap = history[idx];                 // 该手「行动之前」的起点
+  history = history.slice(0, idx);           // 连同起点一起丢弃，起点即当前局面
+  state = cloneState(snap.s);
+  state.over=false;                          // 若上一手已判负，悔棋可救回
   state.winner=-1;
   document.getElementById("winOverlay").classList.add("hidden");
   resetUi(); render();
-  log("悔棋：回到上一手之前","");
+  log("悔棋：退回上一步之前","");
 }
 document.getElementById("btnAgain").addEventListener("click", ()=>{
   document.getElementById("winOverlay").classList.add("hidden");
